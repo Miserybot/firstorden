@@ -1,16 +1,15 @@
-import json
-from telegram import Bot, Update, ReplyKeyboardMarkup, KeyboardButton
-from core.types import User, Group, Admin, session, admin
-from core.utils import send_async
-from core.functions.admins import del_adm
-from enum import Enum
-from core.enums import Castle, Icons
-import logging
+from telegram import ReplyKeyboardMarkup, KeyboardButton
 
 
 def generate_standard_markup():
     buttons = []
-    buttons.append(KeyboardButton('Приказы'))
-    buttons.append(KeyboardButton('Статус'))
-    buttons.append(KeyboardButton('Группы'))
-    return ReplyKeyboardMarkup([buttons], True)
+    buttons.append([KeyboardButton('Приказы'), KeyboardButton('Статус'), KeyboardButton('Группы')])
+    buttons.append([KeyboardButton('Список отряда')])
+    return ReplyKeyboardMarkup(buttons, True)
+
+
+def generate_group_admin_markup():
+    buttons = []
+    buttons.append([KeyboardButton('Приказы'), KeyboardButton('Заявки в отряд'), KeyboardButton('Список отряда')])
+    buttons.append([KeyboardButton('Чистка отряда')])
+    return ReplyKeyboardMarkup(buttons, True)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
+from core.texts import MSG_NO_SQUAD
 from core.types import *
-from datetime import datetime
 
 
 def fill_template(msg: str, user: User):
@@ -19,7 +19,6 @@ def fill_char_template(msg: str, user: User, char: Character):
     msg = msg.replace('%date%', str(char.date))
     msg = msg.replace('%name%', str(char.name))
     msg = msg.replace('%prof%', str(char.prof))
-    msg = msg.replace('%pet%', str(char.pet))
     msg = msg.replace('%petLevel%', str(char.petLevel))
     msg = msg.replace('%maxStamina%', str(char.maxStamina))
     msg = msg.replace('%level%', str(char.level))
@@ -29,4 +28,13 @@ def fill_char_template(msg: str, user: User, char: Character):
     msg = msg.replace('%needExp%', str(char.needExp))
     msg = msg.replace('%castle%', str(char.castle))
     msg = msg.replace('%gold%', str(char.gold))
+    if user.member is not None and user.member.approved:
+        session = Session()
+        msg = msg.replace('%squad%', str(session.query(Squad).filter_by(chat_id=user.member.squad_id).first().squad_name))
+    else:
+        msg = msg.replace('%squad%', MSG_NO_SQUAD)
+    if char.pet is not None:
+        msg = msg.replace('%pet%', '{} {} lvl'.format(str(char.pet), str(char.petLevel)))
+    else:
+        msg = msg.replace('%pet%', 'Животины нет')
     return msg
