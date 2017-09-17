@@ -422,7 +422,7 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
                             confirmed = order.cleared
                             msg = MSG_ORDER_CLEARED_BY_HEADER
                             for confirm in confirmed:
-                                msg += '\n' + str(confirm.user)
+                                msg += str(confirm.user) + '\n'
                             bot.editMessageText(msg, order.chat_id, order.confirmed_msg)
                         update.callback_query.answer(text=MSG_ORDER_CLEARED)
                     else:
