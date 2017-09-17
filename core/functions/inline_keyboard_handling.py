@@ -370,7 +370,7 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
             order.text = chat_data['order']
             order.chat_id = data['id']
             order.date = datetime.now()
-            order.confirmed_msg = send_async(bot, chat_id=order.chat_id, text=MSG_ORDER_CLEARED_BY_HEADER + MSG_EMPTY).result()
+            order.confirmed_msg = send_async(bot, chat_id=order.chat_id, text=MSG_ORDER_CLEARED_BY_HEADER + MSG_EMPTY).result().message_id
             session.add(order)
             session.commit()
             markup = generate_ok_markup(order.id, 0)
@@ -389,7 +389,7 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
                 order.text = chat_data['order']
                 order.chat_id = item.chat_id
                 order.date = datetime.now()
-                order.confirmed_msg = send_async(bot, chat_id=order.chat_id, text=MSG_ORDER_CLEARED_BY_HEADER + MSG_EMPTY).result()
+                order.confirmed_msg = send_async(bot, chat_id=order.chat_id, text=MSG_ORDER_CLEARED_BY_HEADER + MSG_EMPTY).result().message_id
                 session.add(order)
                 session.commit()
                 markup = generate_ok_markup(order.id, 0)
