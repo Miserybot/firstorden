@@ -80,7 +80,7 @@ def char_update(bot: Bot, update: Update):
             char = parse_hero(update.message.text, update.message.from_user.id, update.message.forward_date)
         elif re.search(profile, update.message.text):
             char = parse_profile(update.message.text, update.message.from_user.id, update.message.forward_date)
-        if char and char.castle == '🇲🇴':
+        if char and char.castle == '🇰🇮':
             send_async(bot, chat_id=update.message.chat.id, text=MSG_PROFILE_SAVED.format(char.name))
         else:
             send_async(bot, chat_id=update.message.chat.id,
@@ -93,7 +93,7 @@ def char_show(bot: Bot, update: Update):
         user = session.query(User).filter_by(id=update.message.from_user.id).first()
         if user is not None and user.character is not None:
             char =user.character
-            if char.castle == '🇲🇴':
+            if char.castle == '🇰🇮':
                 text = fill_char_template(MSG_PROFILE_SHOW_FORMAT, user, char)
                 btns = generate_profile_buttons(user)
                 send_async(bot, chat_id=update.message.chat.id, text=text, reply_markup=btns)
