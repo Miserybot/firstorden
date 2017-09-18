@@ -208,12 +208,11 @@ def generate_profile_buttons(user):
 
 
 def generate_squad_list_key(squad):
-    session = Session()
     attack = 0
     defence = 0
-    members = session.query(SquadMember).filter_by(squad_id=squad.chat_id).all()
+    members = squad.members
     for member in members:
-        character = session.query(Character).filter_by(user_id=member.user_id).order_by(Character.date.desc()).limit(1).first()
+        character = member.character
         attack += character.attack
         defence += character.defence
     return [InlineKeyboardButton(
