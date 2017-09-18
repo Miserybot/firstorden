@@ -1,7 +1,6 @@
 from telegram import Update, Bot
-from core.types import User, AdminType, Admin, admin, session, OrderGroup, Group, Squad, Order, OrderCleared
+from core.types import AdminType, admin, Session, Squad
 from core.utils import send_async
-from core.functions.inline_keyboard_handling import generate_groups_manage, generate_group_manage
 from datetime import datetime, timedelta
 from core.texts import *
 
@@ -28,23 +27,35 @@ def activity(squad, days=0, hours=0):
 
 @admin(adm_type=AdminType.GROUP)
 def day_activity(bot: Bot, update: Update):
-    squad = session.query(Squad).filter_by(chat_id=update.message.chat.id).first()
-    if squad is not None:
-        msg = activity(squad, days=1)
-        send_async(bot, chat_id=update.message.chat.id, text=msg)
+    session = Session()
+    try:
+        squad = session.query(Squad).filter_by(chat_id=update.message.chat.id).first()
+        if squad is not None:
+            msg = activity(squad, days=1)
+            send_async(bot, chat_id=update.message.chat.id, text=msg)
+    except:
+        session.rollback()
 
 
 @admin(adm_type=AdminType.GROUP)
 def week_activity(bot: Bot, update: Update):
-    squad = session.query(Squad).filter_by(chat_id=update.message.chat.id).first()
-    if squad is not None:
-        msg = activity(squad, days=7)
-        send_async(bot, chat_id=update.message.chat.id, text=msg)
+    session = Session()
+    try:
+        squad = session.query(Squad).filter_by(chat_id=update.message.chat.id).first()
+        if squad is not None:
+            msg = activity(squad, days=7)
+            send_async(bot, chat_id=update.message.chat.id, text=msg)
+    except:
+        session.rollback()
 
 
 @admin(adm_type=AdminType.GROUP)
 def battle_activity(bot: Bot, update: Update):
-    squad = session.query(Squad).filter_by(chat_id=update.message.chat.id).first()
-    if squad is not None:
-        msg = activity(squad, hours=4)
-        send_async(bot, chat_id=update.message.chat.id, text=msg)
+    session = Session()
+    try:
+        squad = session.query(Squad).filter_by(chat_id=update.message.chat.id).first()
+        if squad is not None:
+            msg = activity(squad, hours=4)
+            send_async(bot, chat_id=update.message.chat.id, text=msg)
+    except:
+        session.rollback()

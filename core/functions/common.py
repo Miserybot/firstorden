@@ -1,9 +1,9 @@
-from telegram import Update, Bot, ParseMode
+from telegram import Update, Bot, ParseMode, TelegramError
 import logging
 from core.functions.triggers import trigger_decorator
-from core.types import AdminType, Admin, Stock, admin, session
+from core.types import AdminType, Admin, Stock, admin, Session, Group
 from core.utils import send_async, add_user
-from core.functions.reply_markup import generate_standard_markup
+from core.functions.reply_markup import generate_admin_markup
 from enum import Enum
 from datetime import datetime
 from core.texts import *
@@ -28,10 +28,32 @@ def start(bot: Bot, update: Update):
         send_async(bot, chat_id=update.message.chat.id, text=MSG_START_WELCOME)
 
 
-@admin()
+@admin(adm_type=AdminType.GROUP)
 def admin_panel(bot: Bot, update: Update):
     if update.message.chat.type == 'private':
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_ADMIN_WELCOME, reply_markup=generate_standard_markup())
+        session = Session()
+        admin = session.query(Admin).filter_by(user_id=update.message.from_user.id).all()
+        full_adm = False
+        grp_adm = False
+        for adm in admin:
+            if adm.admin_type <= AdminType.FULL.value:
+                full_adm = True
+            else:
+                grp_adm = True
+        send_async(bot, chat_id=update.message.chat.id, text=MSG_ADMIN_WELCOME,
+                   reply_markup=generate_admin_markup(full_adm, grp_adm))
+
+
+def check_bot_in_chats(bot: Bot, update: Update):
+    session = Session()
+    groups = session.query(Group).filter_by(bot_in_group=True).all()
+    for group in groups:
+        try:
+            bot.getChatMember(group.id, bot.id)
+        except TelegramError as e:
+            group.bot_in_group = False
+            session.add(group)
+    session.commit()
 
 
 @admin()
@@ -41,6 +63,7 @@ def kick(bot: Bot, update: Update):
 
 @trigger_decorator
 def help_msg(bot: Bot, update):
+    session = Session()
     admin_user = session.query(Admin).filter_by(user_id=update.message.from_user.id).all()
     global_adm = False
     for adm in admin_user:
@@ -81,6 +104,7 @@ def get_diff(dict_one, dict_two):
 
 
 def stock_compare(bot: Bot, update: Update, chat_data: dict):
+    session = Session()
     old_stock = session.query(Stock).filter_by(user_id=update.message.from_user.id,
                                                stock_type=StockType.Stock.value).order_by(Stock.date.desc()).first()
     new_stock = Stock()
@@ -121,7 +145,20 @@ def stock_compare(bot: Bot, update: Update, chat_data: dict):
         send_async(bot, chat_id=update.message.chat.id, text=MSG_STOCK_COMPARE_WAIT)
 
 
+@admin(adm_type=AdminType.GROUP)
+def delete_msg(bot: Bot, update: Update):
+    bot.delete_message(update.message.reply_to_message.chat_id, update.message.reply_to_message.message_id)
+    bot.delete_message(update.message.reply_to_message.chat_id, update.message.message_id)
+
+
+@admin()
+def delete_user(bot: Bot, update: Update):
+    bot.kickChatMember(update.message.reply_to_message.chat_id, update.message.reply_to_message.from_user.id)
+    bot.unbanChatMember(update.message.reply_to_message.chat_id, update.message.reply_to_message.from_user.id)
+
+
 def trade_compare(bot: Bot, update: Update, chat_data: dict):
+    session = Session()
     old_stock = session.query(Stock).filter_by(user_id=update.message.from_user.id,
                                                stock_type=StockType.TradeBot.value).order_by(Stock.date.desc()).first()
     new_stock = Stock()
