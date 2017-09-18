@@ -375,7 +375,7 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
             session.commit()
             markup = generate_ok_markup(order.id, 0)
             msg = send_order(bot, order.text, chat_data['order_type'], order.chat_id, markup).result().result()
-            if chat_data['pin']:
+            if 'pin' in chat_data and chat_data['pin'] or 'pin' not in chat_data:
                 try:
                     bot.request.post(bot.base_url + '/pinChatMessage', {'chat_id': order.chat_id,
                                                                         'message_id': msg.message_id,
@@ -394,7 +394,7 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
                 session.commit()
                 markup = generate_ok_markup(order.id, 0)
                 msg = send_order(bot, order.text, chat_data['order_type'], order.chat_id, markup).result().result()
-                if chat_data['pin']:
+                if 'pin' in chat_data and chat_data['pin'] or 'pin' not in chat_data:
                     try:
                         bot.request.post(bot.base_url + '/pinChatMessage',
                                          {'chat_id': order.chat_id, 'message_id': msg.message_id,
