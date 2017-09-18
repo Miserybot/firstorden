@@ -207,7 +207,6 @@ class Character(Base):
     donateGold = Column(Integer, default=0)
 
     user = relationship('User', back_populates='character')
-    member = relationship('SquadMember', back_populates='character')
 
 
 class Squad(Base):
@@ -232,7 +231,6 @@ class SquadMember(Base):
 
     squad = relationship('Squad', back_populates='members')
     user = relationship('User', back_populates='member')
-    character = relationship('Character', back_populates='member', order_by='Character.date.desc()', uselist=False)
 
 
 class Equip(Base):
