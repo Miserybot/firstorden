@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from core.texts import MSG_NO_SQUAD
+from core.texts import MSG_NO_SQUAD, MSG_NO_PET
 from core.types import *
 
 
@@ -35,7 +35,7 @@ def fill_char_template(msg: str, user: User, char: Character, squad_request=Fals
     if char.pet is not None:
         msg = msg.replace('%pet%', '{} {} lvl'.format(str(char.pet), str(char.petLevel)))
     else:
-        msg = msg.replace('%pet%', 'Животины нет')
+        msg = msg.replace('%pet%', MSG_NO_PET)
     if squad_request:
         msg += '\n\nХочет вступить в отряд {}'.format(user.member.squad.squad_name)
     return msg
