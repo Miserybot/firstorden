@@ -47,6 +47,6 @@ def order(bot: Bot, update: Update, session, chat_data):
 
 
 @admin_allowed(adm_type=AdminType.GROUP)
-def orders(bot: Bot, update: Update):
+def orders(bot: Bot, update: Update, session, chat_data):
     markup = generate_flag_orders()
     send_async(bot, chat_id=update.message.chat.id, text=MSG_FLAG_CHOOSE_HEADER, reply_markup=markup)
