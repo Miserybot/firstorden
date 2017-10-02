@@ -275,8 +275,7 @@ def ready_to_battle_result(bot):
 
                 send_async(bot,
                            chat_id=item.chat_id,
-                           text=text,
-                           parse_mode=ParseMode.HTML)
+                           text=text)
 
                 full_attack += attack
                 full_defence += defence
@@ -293,8 +292,7 @@ def ready_to_battle_result(bot):
 
         send_async(bot,
                    chat_id=GOVERNMENT_CHAT,
-                   text=full_text,
-                   parse_mode=ParseMode.HTML)
+                   text=full_text)
 
     # FIX: слишком общая ошибка
     except Exception:

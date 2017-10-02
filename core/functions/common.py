@@ -172,8 +172,7 @@ def stock_compare(bot: Bot, update: Update):
 
         send_async(bot,
                    chat_id=update.message.chat.id,
-                   text=msg,
-                   parse_mode=ParseMode.HTML)
+                   text=msg)
 
     else:
         send_async(bot,
@@ -244,8 +243,7 @@ def trade_compare(bot: Bot, update: Update):
 
         send_async(bot,
                    chat_id=update.message.chat.id,
-                   text=msg,
-                   parse_mode=ParseMode.HTML)
+                   text=msg)
 
     else:
         send_async(bot,

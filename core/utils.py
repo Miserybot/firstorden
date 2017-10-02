@@ -1,6 +1,6 @@
 import http.client
 
-from telegram import Bot
+from telegram import Bot, ParseMode
 from telegram.error import ChatMigrated
 from telegram.ext.dispatcher import run_async
 
@@ -10,7 +10,7 @@ from core.types import Session, User, Group
 @run_async
 def send_async(bot: Bot, *args, **kwargs):
     try:
-        return bot.sendMessage(*args, **kwargs)
+        return bot.sendMessage(*args, parse_mode=ParseMode.MARKDOWN, **kwargs)
 
     except ChatMigrated as err:
         session = Session()
