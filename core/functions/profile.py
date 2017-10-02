@@ -1,13 +1,17 @@
+from datetime import timedelta
+import re
+
 from telegram import Update, Bot
 
 from core.functions.inline_keyboard_handling import generate_profile_buttons
 from core.regexp import HERO, PROFILE
+from core.template import fill_char_template
+from core.texts import (
+    MSG_PROFILE_OLD, MSG_PROFILE_SAVED,
+    MSG_PROFILE_NOT_FOUND, MSG_PROFILE_SHOW_FORMAT
+)
 from core.types import Character, User, admin_allowed, Equip, user_allowed
 from core.utils import send_async
-from datetime import timedelta
-import re
-from core.template import fill_char_template
-from core.texts import *
 
 
 def parse_profile(profile, user_id, date, session):

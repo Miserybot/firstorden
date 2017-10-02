@@ -1,8 +1,10 @@
 from telegram import Update, Bot
+
+from core.functions.inline_keyboard_handling import (
+    generate_groups_manage, generate_group_manage)
 from core.types import OrderGroup, admin_allowed, AdminType
 from core.utils import send_async
-from core.functions.inline_keyboard_handling import generate_groups_manage, generate_group_manage
-from core.texts import *
+from core.texts import MSG_ORDER_GROUP_LIST, MSG_ORDER_GROUP_CONFIG_HEADER
 
 
 @admin_allowed(AdminType.FULL)

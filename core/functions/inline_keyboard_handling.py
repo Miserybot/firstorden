@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from enum import Enum
 import json
-from json import loads
 import logging
 from multiprocessing.pool import ThreadPool
 
@@ -11,12 +10,24 @@ from telegram.ext.dispatcher import run_async
 from core.enums import Castle, Icons
 from core.functions.admins import del_adm
 from core.template import fill_char_template
+from core.texts import (
+    MSG_GROUP_STATUS_CHOOSE_CHAT, MSG_GROUP_STATUS_ADMIN_FORMAT,
+    MSG_GROUP_STATUS_DEL_ADMIN, MSG_GROUP_STATUS, MSG_ON, MSG_OFF, MSG_BACK,
+    MSG_ORDER_PIN, MSG_ORDER_NO_PIN, MSG_ORDER_TO_SQUADS, MSG_ORDER_ACCEPT,
+    MSG_ORDER_GROUP_ADD, MSG_SYMBOL_ON, MSG_SYMBOL_OFF, MSG_ORDER_GROUP_DEL,
+    MSG_ORDER_CLEARED_BY_HEADER, MSG_EMPTY, MSG_ORDER_SENT, MSG_ORDER_CLEARED,
+    MSG_ORDER_CLEARED_ERROR, MSG_ORDER_SEND_HEADER, MSG_ORDER_GROUP_NEW,
+    MSG_ORDER_GROUP_CONFIG_HEADER, MSG_CLEARED, MSG_PROFILE_SHOW_FORMAT,
+    MSG_SQUAD_LEFT, MSG_ORDER_GROUP_LIST, MSG_SQUAD_REQUESTED,
+    MSG_SQUAD_REQUEST_ACCEPTED, MSG_SQUAD_REQUEST_ACCEPTED_ANSWER,
+    MSG_SQUAD_REQUEST_NEW, MSG_SQUAD_REQUEST_EXISTS, MSG_SQUAD_ADD_ACCEPTED,
+    MSG_SQUAD_REQUEST_DECLINED, MSG_SQUAD_REQUEST_DECLINED_ANSWER,
+)
 from core.types import (
     User, Group, Admin, admin_allowed, Order, OrderGroup,
     OrderGroupItem, OrderCleared, Squad, user_allowed,
     Character, SquadMember, MessageType, AdminType
 )
-from core.texts import *
 from core.utils import send_async, update_group, add_user
 
 
@@ -183,13 +194,21 @@ def generate_group_manage(group_id, session):
             if item.group_id == group_id:
                 in_group = True
                 break
-        inline_keys.append([InlineKeyboardButton((MSG_SYMBOL_ON if in_group else MSG_SYMBOL_OFF) +
-                                                 squad.squad_name, callback_data=json.dumps(
-            {'t': QueryType.OrderGroupTriggerChat.value, 'id': group_id, 'c': squad.chat_id}))])
-    inline_keys.append([InlineKeyboardButton(MSG_ORDER_GROUP_DEL, callback_data=json.dumps(
-        {'t': QueryType.OrderGroupDelete.value, 'id': group_id}))])
-    inline_keys.append([InlineKeyboardButton(MSG_BACK, callback_data=json.dumps(
-        {'t': QueryType.OrderGroupList.value}))])
+        inline_keys.append([InlineKeyboardButton(
+            (MSG_SYMBOL_ON if in_group else MSG_SYMBOL_OFF) + squad.squad_name,
+            callback_data=json.dumps({'t': QueryType.OrderGroupTriggerChat.value,
+                                      'id': group_id,
+                                      'c': squad.chat_id}))])
+
+    inline_keys.append([InlineKeyboardButton(
+        MSG_ORDER_GROUP_DEL,
+        callback_data=json.dumps({'t': QueryType.OrderGroupDelete.value,
+                                  'id': group_id}))])
+
+    inline_keys.append([InlineKeyboardButton(
+        MSG_BACK,
+        callback_data=json.dumps({'t': QueryType.OrderGroupList.value}))])
+
     return InlineKeyboardMarkup(inline_keys)
 
 
@@ -314,7 +333,7 @@ def send_order(bot, order, order_type, chat_id, markup):
         msg_sent = bot.send_sticker(chat_id, order, reply_markup=markup)
     elif order_type == MessageType.CONTACT.value:
         msg = order.replace('\'', '"')
-        contact = loads(msg)
+        contact = json.loads(msg)
         if 'phone_number' not in contact.keys():
             contact['phone_number'] = None
         if 'first_name' not in contact.keys():
@@ -332,7 +351,7 @@ def send_order(bot, order, order_type, chat_id, markup):
         msg_sent = bot.send_video_note(chat_id, order, reply_markup=markup)
     elif order_type == MessageType.LOCATION.value:
         msg = order.replace('\'', '"')
-        location = loads(msg)
+        location = json.loads(msg)
         msg_sent = bot.send_location(chat_id, location['latitude'], location['longitude'], reply_markup=markup)
     elif order_type == MessageType.PHOTO.value:
         msg_sent = bot.send_photo(chat_id, order, reply_markup=markup)
@@ -456,7 +475,7 @@ def callback_query(bot: Bot, update: Update, session, chat_data: dict):
                 else:
                     update.callback_query.answer(text=MSG_ORDER_CLEARED_ERROR)
     elif data['t'] == QueryType.Orders.value:
-        if 'txt' in data and len(data['txt']):
+        if 'txt' in data and data['txt']:
             if data['txt'] == Icons.LES.value:
                 chat_data['order'] = Castle.LES.value
             elif data['txt'] == Icons.GORY.value:
@@ -471,7 +490,7 @@ def callback_query(bot: Bot, update: Update, session, chat_data: dict):
                             update.callback_query.message.message_id,
                             reply_markup=markup)
     elif data['t'] == QueryType.OrderGroup.value:
-        if 'txt' in data and len(data['txt']):
+        if 'txt' in data and data['txt']:
             chat_data['order_type'] = MessageType.TEXT
             if data['txt'] == Icons.LES.value:
                 chat_data['order'] = Castle.LES.value
@@ -571,13 +590,13 @@ def callback_query(bot: Bot, update: Update, session, chat_data: dict):
             for adm in admins:
                 if adm.user_id != update.callback_query.from_user.id:
                     send_async(bot, chat_id=adm.user_id,
-                               text=MSG_SQUAD_LEAVED.format(user.character.name, squad.squad_name))
+                               text=MSG_SQUAD_LEFT.format(user.character.name, squad.squad_name))
             send_async(bot, chat_id=member.squad_id,
-                       text=MSG_SQUAD_LEAVED.format(user.character.name, squad.squad_name))
+                       text=MSG_SQUAD_LEFT.format(user.character.name, squad.squad_name))
             send_async(bot, chat_id=member.user_id,
-                       text=MSG_SQUAD_LEAVED.format(user.character.name, squad.squad_name))
+                       text=MSG_SQUAD_LEFT.format(user.character.name, squad.squad_name))
             if data['id'] == update.callback_query.from_user.id:
-                bot.editMessageText(MSG_SQUAD_LEAVED.format(user.character.name, squad.squad_name),
+                bot.editMessageText(MSG_SQUAD_LEFT.format(user.character.name, squad.squad_name),
                                     update.callback_query.message.chat.id,
                                     update.callback_query.message.message_id)
             else:

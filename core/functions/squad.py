@@ -1,12 +1,23 @@
 from telegram import Update, Bot
 
-from core.template import fill_char_template
-from core.types import User, AdminType, Admin, admin_allowed, Group, Squad, SquadMember, user_allowed
-from core.utils import send_async
-from core.functions.inline_keyboard_handling import generate_squad_list, \
-    generate_leave_squad, generate_squad_request, generate_squad_request_answer, generate_fire_up, \
+from core.functions.inline_keyboard_handling import (
+    generate_squad_list, generate_leave_squad, generate_squad_request,
+    generate_squad_request_answer, generate_fire_up,
     generate_squad_invite_answer
-from core.texts import *
+)
+from core.template import fill_char_template
+from core.texts import (
+    MSG_SQUAD_NEW, MSG_SQUAD_LINK_SAVED, MSG_SQUAD_RENAMED,
+    MSG_SQUAD_DELETE, MSG_SQUAD_THORNS_ENABLED, MSG_SQUAD_LIST,
+    MSG_SQUAD_CLEAN, MSG_SQUAD_THORNS_DISABLED, MSG_SQUAD_ADD,
+    MSG_SQUAD_REQUEST, MSG_SQUAD_REQUEST_EXISTS, MSG_SQUAD_REQUEST_EMPTY,
+    MSG_PROFILE_SHOW_FORMAT, MSG_SQUAD_ADD_IN_SQUAD
+)
+from core.types import (
+    User, AdminType, Admin, admin_allowed, Group,
+    Squad, SquadMember, user_allowed
+)
+from core.utils import send_async
 
 
 @admin_allowed()
@@ -97,7 +108,7 @@ def squad_list(bot: Bot, update: Update, session):
     else:
         for adm in admin:
             group = session.query(Group).filter_by(id=adm.admin_group).first()
-            if len(group.squad) and group.squad[0]:
+            if group.squad and group.squad[0]:
                 squads.append(group.squad[0])
     markup = generate_squad_list(squads)
     send_async(bot, chat_id=update.message.chat.id, text=MSG_SQUAD_LIST, reply_markup=markup)

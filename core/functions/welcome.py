@@ -1,10 +1,17 @@
-from telegram import Update, Bot
-from core.types import Wellcomed, WelcomeMsg, AdminType, admin_allowed, Admin, user_allowed
-from core.template import fill_template
 from time import time
-from core.utils import send_async, add_user, update_group
+
+from telegram import Update, Bot
+
 from core.functions.newbies import newbie
-from core.texts import *
+from core.template import fill_template
+from core.texts import (
+    MSG_THORNS, MSG_WELCOME_DEFAULT, MSG_WELCOME_SET,
+    MSG_WELCOME_ENABLED, MSG_WELCOME_DISABLED
+)
+from core.types import (
+    Wellcomed, WelcomeMsg, AdminType, admin_allowed, Admin, user_allowed)
+from core.utils import send_async, add_user, update_group
+
 
 last_welcome = 0
 

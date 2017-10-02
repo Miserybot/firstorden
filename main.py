@@ -176,7 +176,7 @@ def manage_all(bot: Bot, update: Update, session, chat_data, job_queue):
             elif text == 'заявки в отряд':
                 list_squad_requests(bot, update)
             elif text in ['приказы', 'пин']:
-                orders(bot, update, chat_data)
+                orders(bot, update)
             elif text in ['список отряда', 'список']:
                 Thread(target=squad_list, args=(bot, update)).start()
             elif text == 'группы':

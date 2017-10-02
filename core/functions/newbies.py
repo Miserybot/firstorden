@@ -1,8 +1,9 @@
 from telegram import Update, Bot
-from core.types import User, Group, user_allowed
+
 from core.template import fill_template
+from core.texts import MSG_NEWBIE
+from core.types import User, Group, user_allowed
 from core.utils import send_async
-from core.texts import *
 
 
 @user_allowed

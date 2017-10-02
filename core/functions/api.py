@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 import json
 
 import flask
-from werkzeug.routing import IntegerConverter as BaseIntegerConverter
 from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.routing import IntegerConverter as BaseIntegerConverter
 
 from core.types import Order, Session, Squad, SquadMember, OrderCleared
 
