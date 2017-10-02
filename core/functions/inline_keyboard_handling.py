@@ -1,23 +1,26 @@
+from datetime import datetime, timedelta
+from enum import Enum
 import json
+from json import loads
+import logging
+from multiprocessing.pool import ThreadPool
 
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup, TelegramError
 from telegram.ext.dispatcher import run_async
 
-from core.template import fill_char_template
-from core.types import User, Group, Admin, Session, admin, Order, OrderGroup, OrderGroupItem, OrderCleared, Squad, \
-    Character, Session, SquadMember, MessageType
-from core.utils import send_async, update_group, add_user
-from core.functions.admins import del_adm
-from enum import Enum
 from core.enums import Castle, Icons
-import logging
-from core.types import AdminType
-from datetime import datetime, timedelta
+from core.functions.admins import del_adm
+from core.template import fill_char_template
+from core.types import (
+    User, Group, Admin, admin_allowed, Order, OrderGroup,
+    OrderGroupItem, OrderCleared, Squad, user_allowed,
+    Character, SquadMember, MessageType, AdminType
+)
 from core.texts import *
-from multiprocessing.pool import ThreadPool
-from json import loads
+from core.utils import send_async, update_group, add_user
 
-logger = logging.getLogger('MyApp')
+
+LOGGER = logging.getLogger('MyApp')
 
 
 class QueryType(Enum):
@@ -46,9 +49,8 @@ class QueryType(Enum):
     TriggerOrderPin = 22
 
 
-@admin()
-def send_status(bot: Bot, update: Update):
-    session = Session()
+@admin_allowed()
+def send_status(bot: Bot, update: Update, session):
     msg = MSG_GROUP_STATUS_CHOOSE_CHAT
     squads = session.query(Squad).all()
     inline_keys = []
@@ -60,16 +62,17 @@ def send_status(bot: Bot, update: Update):
     send_async(bot, chat_id=update.message.chat.id, text=msg, reply_markup=inline_markup)
 
 
-def generate_group_info(group_id):
-    session = Session()
+def generate_group_info(group_id, session):
     group = session.query(Group).filter(Group.id == group_id).first()
     admins = session.query(Admin).filter(Admin.admin_group == group_id).all()
     adm_msg = ''
     adm_del_keys = []
     for adm in admins:
         user = session.query(User).filter_by(id=adm.user_id).first()
-        adm_msg += MSG_GROUP_STATUS_ADMIN_FORMAT.format(user.id, user.username or '', user.first_name or '', user.last_name or '')
-        adm_del_keys.append([InlineKeyboardButton(MSG_GROUP_STATUS_DEL_ADMIN.format(user.first_name or '', user.last_name or ''),
+        adm_msg += MSG_GROUP_STATUS_ADMIN_FORMAT.\
+            format(user.id, user.username or '', user.first_name or '', user.last_name or '')
+        adm_del_keys.append([InlineKeyboardButton(MSG_GROUP_STATUS_DEL_ADMIN.
+                                                  format(user.first_name or '', user.last_name or ''),
                                                   callback_data=json.dumps(
                                                       {'t': QueryType.DelAdm.value, 'uid': user.id,
                                                        'gid': group_id}))])
@@ -109,8 +112,7 @@ def generate_flag_orders():
     return inline_markup
 
 
-def generate_order_chats_markup(bot: Bot, pin=True):
-    session = Session()
+def generate_order_chats_markup(session, pin=True):
     squads = session.query(Squad).all()
     inline_keys = []
     for squad in squads:
@@ -122,8 +124,7 @@ def generate_order_chats_markup(bot: Bot, pin=True):
     return inline_markup
 
 
-def generate_order_groups_markup(bot: Bot, admin_user: list=None, pin: bool=True):
-    session = Session()
+def generate_order_groups_markup(session, admin_user: list=None, pin: bool=True):
     if admin_user:
         group_adm = True
         for adm in admin_user:
@@ -162,8 +163,7 @@ def generate_ok_markup(order_id, count):
     return inline_markup
 
 
-def generate_groups_manage():
-    session = Session()
+def generate_groups_manage(session):
     groups = session.query(OrderGroup).all()
     inline_keys = []
     for group in groups:
@@ -174,8 +174,7 @@ def generate_groups_manage():
     return InlineKeyboardMarkup(inline_keys)
 
 
-def generate_group_manage(group_id):
-    session = Session()
+def generate_group_manage(group_id, session):
     squads = session.query(Squad).all()
     inline_keys = []
     for squad in squads:
@@ -195,9 +194,8 @@ def generate_group_manage(group_id):
 
 
 def generate_profile_buttons(user):
-    inline_keys = []
-    inline_keys.append([InlineKeyboardButton('🏅Герой', callback_data=json.dumps(
-        {'t': QueryType.ShowHero.value, 'id': user.id}))])
+    inline_keys = [[InlineKeyboardButton('🏅Герой', callback_data=json.dumps(
+        {'t': QueryType.ShowHero.value, 'id': user.id}))]]
     if user.stock:
         inline_keys.append([InlineKeyboardButton('📦Склад', callback_data=json.dumps(
             {'t': QueryType.ShowStock.value, 'id': user.id}))])
@@ -207,13 +205,15 @@ def generate_profile_buttons(user):
     return InlineKeyboardMarkup(inline_keys)
 
 
-def generate_squad_list_key(squad):
-    session = Session()
+def generate_squad_list_key(squad, session):
     attack = 0
     defence = 0
     members = session.query(SquadMember).filter_by(squad_id=squad.chat_id).all()
     for member in members:
-        character = session.query(Character).filter_by(user_id=member.user_id).order_by(Character.date.desc()).limit(1).first()
+        character = session.query(Character).\
+            filter_by(user_id=member.user_id).\
+            order_by(Character.date.desc()).\
+            limit(1).first()
         attack += character.attack
         defence += character.defence
     return [InlineKeyboardButton(
@@ -238,14 +238,13 @@ def generate_squad_list(squads):
 
 
 def generate_leave_squad(user_id):
-    inline_keys = []
-    inline_keys.append([InlineKeyboardButton('Выйти',
-                        callback_data=json.dumps({'t': QueryType.LeaveSquad.value, 'id': user_id}))])
+    inline_keys = [[InlineKeyboardButton('Выйти',
+                                         callback_data=json.dumps({'t': QueryType.LeaveSquad.value,
+                                                                   'id': user_id}))]]
     return InlineKeyboardMarkup(inline_keys)
 
 
-def generate_squad_request():
-    session = Session()
+def generate_squad_request(session):
     inline_keys = []
     squads = session.query(Squad).filter_by(hiring=True).all()
     for squad in squads:
@@ -260,30 +259,35 @@ def generate_squad_members(members):
     for member in members:
         user = member.user
         character = user.character
-        inline_keys.append([InlineKeyboardButton('{}: {}⚔ {}🛡'.format(user, character.attack, character.defence), callback_data=json.dumps(
-            {'t': QueryType.ShowHero.value, 'id': member.user_id}))])
+        inline_keys.append(
+            [InlineKeyboardButton('{}: {}⚔ {}🛡'.
+                                  format(user,
+                                         character.attack,
+                                         character.defence),
+                                  callback_data=json.dumps(
+                                      {'t': QueryType.ShowHero.value,
+                                       'id': member.user_id}
+                                  ))])
     return InlineKeyboardMarkup(inline_keys)
 
 
 def generate_squad_request_answer(user_id):
-    inline_keys = []
-    inline_keys.append(InlineKeyboardButton('✅Принять',
-                                            callback_data=json.dumps(
-                                                {'t': QueryType.RequestSquadAccept.value, 'id': user_id})))
-    inline_keys.append(InlineKeyboardButton('❌Отклонить',
-                                            callback_data=json.dumps(
-                                                {'t': QueryType.RequestSquadDecline.value, 'id': user_id})))
+    inline_keys = [InlineKeyboardButton('✅Принять',
+                                        callback_data=json.dumps(
+                                            {'t': QueryType.RequestSquadAccept.value, 'id': user_id})),
+                   InlineKeyboardButton('❌Отклонить',
+                                        callback_data=json.dumps(
+                                            {'t': QueryType.RequestSquadDecline.value, 'id': user_id}))]
     return InlineKeyboardMarkup([inline_keys])
 
 
 def generate_squad_invite_answer(user_id):
-    inline_keys = []
-    inline_keys.append(InlineKeyboardButton('✅Зелёное Да',
-                                            callback_data=json.dumps(
-                                                {'t': QueryType.InviteSquadAccept.value, 'id': user_id})))
-    inline_keys.append(InlineKeyboardButton('❌Красное Да',
-                                            callback_data=json.dumps(
-                                                {'t': QueryType.InviteSquadDecline.value, 'id': user_id})))
+    inline_keys = [InlineKeyboardButton('✅Зелёное Да',
+                                        callback_data=json.dumps(
+                                            {'t': QueryType.InviteSquadAccept.value, 'id': user_id})),
+                   InlineKeyboardButton('❌Красное Да',
+                                        callback_data=json.dumps(
+                                            {'t': QueryType.InviteSquadDecline.value, 'id': user_id}))]
     return InlineKeyboardMarkup([inline_keys])
 
 
@@ -338,12 +342,12 @@ def send_order(bot, order, order_type, chat_id, markup):
 
 
 @run_async
-def callback_query(bot: Bot, update: Update, chat_data: dict):
-    session = Session()
-    update_group(update.callback_query.message.chat)
-    user = add_user(update.callback_query.from_user)
+@user_allowed
+def callback_query(bot: Bot, update: Update, session, chat_data: dict):
+    update_group(update.callback_query.message.chat, session)
+    user = add_user(update.callback_query.from_user, session)
     data = json.loads(update.callback_query.data)
-    logger.warning(data)
+    LOGGER.warning(data)
     if data['t'] == QueryType.GroupList.value:
         msg = MSG_GROUP_STATUS_CHOOSE_CHAT
         squads = session.query(Squad).all()
@@ -356,12 +360,14 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
         bot.editMessageText(msg, update.callback_query.message.chat.id, update.callback_query.message.message_id,
                             reply_markup=inline_markup)
     elif data['t'] == QueryType.GroupInfo.value:
-        msg, inline_markup = generate_group_info(data['id'])
+        msg, inline_markup = generate_group_info(data['id'], session)
         bot.editMessageText(msg, update.callback_query.message.chat.id, update.callback_query.message.message_id,
                             reply_markup=inline_markup)
     elif data['t'] == QueryType.DelAdm.value:
-        del_adm(bot, data['gid'], user)
-        msg, inline_markup = generate_group_info(data['gid'])
+        admin_user = session.query(User).filter_by(id=data['uid']).first()
+        if admin_user:
+            del_adm(bot, data['gid'], admin_user, session)
+        msg, inline_markup = generate_group_info(data['gid'], session)
         bot.editMessageText(msg, update.callback_query.message.chat.id, update.callback_query.message.message_id,
                             reply_markup=inline_markup)
     elif data['t'] == QueryType.Order.value:
@@ -384,8 +390,8 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
                     bot.request.post(bot.base_url + '/pinChatMessage', {'chat_id': order.chat_id,
                                                                         'message_id': msg.message_id,
                                                                         'disable_notification': False})
-                except:
-                    pass
+                except TelegramError as err:
+                    bot.logger.error(err.message)
         else:
             group = session.query(OrderGroup).filter_by(id=data['id']).first()
             for item in group.items:
@@ -407,8 +413,8 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
                         bot.request.post(bot.base_url + '/pinChatMessage',
                                          {'chat_id': order.chat_id, 'message_id': msg.message_id,
                                           'disable_notification': False})
-                    except:
-                        pass
+                    except TelegramError as err:
+                        bot.logger.error(err.message)
         update.callback_query.answer(text=MSG_ORDER_SENT)
     elif data['t'] == QueryType.OrderOk.value:
         order = session.query(Order).filter_by(id=data['id']).first()
@@ -459,7 +465,7 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
                 chat_data['order'] = Castle.SEA.value
             else:
                 chat_data['order'] = data['txt']
-        markup = generate_order_chats_markup(bot, chat_data['pin'] if 'pin' in chat_data else True)
+        markup = generate_order_chats_markup(session, chat_data['pin'] if 'pin' in chat_data else True)
         bot.editMessageText(MSG_ORDER_SEND_HEADER.format(chat_data['order']),
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
@@ -476,14 +482,14 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
             else:
                 chat_data['order'] = data['txt']
         admin_user = session.query(Admin).filter(Admin.user_id == update.callback_query.from_user.id).all()
-        markup = generate_order_groups_markup(bot, admin_user, chat_data['pin'] if 'pin' in chat_data else True)
+        markup = generate_order_groups_markup(session, admin_user, chat_data['pin'] if 'pin' in chat_data else True)
         bot.editMessageText(MSG_ORDER_SEND_HEADER.format(chat_data['order']),
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
                             reply_markup=markup)
     elif data['t'] == QueryType.OrderGroupManage.value:
         group = session.query(OrderGroup).filter_by(id=data['id']).first()
-        markup = generate_group_manage(data['id'])
+        markup = generate_group_manage(data['id'], session)
         bot.editMessageText(MSG_ORDER_GROUP_CONFIG_HEADER.format(group.name),
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
@@ -502,7 +508,7 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
             item.chat_id = data['c']
             session.add(item)
             session.commit()
-        markup = generate_group_manage(data['id'])
+        markup = generate_group_manage(data['id'], session)
         bot.editMessageText(MSG_ORDER_GROUP_CONFIG_HEADER.format(group.name),
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
@@ -518,12 +524,12 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
         bot.editMessageText(MSG_ORDER_GROUP_LIST,
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
-                            reply_markup=generate_groups_manage())
+                            reply_markup=generate_groups_manage(session))
     elif data['t'] == QueryType.OrderGroupList.value:
         bot.editMessageText(MSG_ORDER_GROUP_LIST,
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
-                            reply_markup=generate_groups_manage())
+                            reply_markup=generate_groups_manage(session))
     elif data['t'] == QueryType.ShowEquip.value:
         user = session.query(User).filter_by(id=data['id']).first()
         update.callback_query.answer(text=MSG_CLEARED)
@@ -534,7 +540,8 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
     elif data['t'] == QueryType.ShowStock.value:
         user = session.query(User).filter_by(id=data['id']).first()
         update.callback_query.answer(text=MSG_CLEARED)
-        bot.editMessageText('{}\n🕑 Последнее обновление {}'.format(user.stock.stock, user.stock.date.strftime("%Y-%m-%d %H:%M:%S")),
+        bot.editMessageText('{}\n🕑 Последнее обновление {}'.
+                            format(user.stock.stock, user.stock.date.strftime("%Y-%m-%d %H:%M:%S")),
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
                             reply_markup=generate_profile_buttons(user))
@@ -655,13 +662,13 @@ def callback_query(bot: Bot, update: Update, chat_data: dict):
             chat_data['pin'] = False
         if data['g']:
             admin_user = session.query(Admin).filter(Admin.user_id == update.callback_query.from_user.id).all()
-            markup = generate_order_groups_markup(bot, admin_user, chat_data['pin'] if 'pin' in chat_data else True)
+            markup = generate_order_groups_markup(session, admin_user, chat_data['pin'] if 'pin' in chat_data else True)
             bot.editMessageText(MSG_ORDER_SEND_HEADER.format(chat_data['order']),
                                 update.callback_query.message.chat.id,
                                 update.callback_query.message.message_id,
                                 reply_markup=markup)
         else:
-            markup = generate_order_chats_markup(bot, chat_data['pin'] if 'pin' in chat_data else True)
+            markup = generate_order_chats_markup(session, chat_data['pin'] if 'pin' in chat_data else True)
             bot.editMessageText(MSG_ORDER_SEND_HEADER.format(chat_data['order']),
                                 update.callback_query.message.chat.id,
                                 update.callback_query.message.message_id,
