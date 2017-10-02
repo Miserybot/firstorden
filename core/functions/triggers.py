@@ -1,8 +1,15 @@
+from json import loads
+
 from telegram import Update, Bot, Message, ParseMode
+
+from core.texts import (
+    MSG_TRIGGER_NEW, MSG_TRIGGER_NEW_ERROR, MSG_TRIGGER_EXISTS,
+    MSG_TRIGGER_ALL_ENABLED, MSG_TRIGGER_ALL_DISABLED,
+    MSG_TRIGGER_DEL, MSG_TRIGGER_DEL_ERROR,
+    MSG_TRIGGER_LIST_HEADER, MSG_EMPTY
+)
 from core.types import Trigger, AdminType, admin, Session, MessageType, LocalTrigger
 from core.utils import send_async, update_group
-from core.texts import *
-from json import loads
 
 
 def trigger_decorator(func):
@@ -64,9 +71,14 @@ def set_global_trigger(bot: Bot, update: Update):
         trigger = msg[1].strip()
         data = update.message.reply_to_message
         add_global_trigger_db(data, trigger)
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW.format(trigger))
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_TRIGGER_NEW.format(trigger))
+
     else:
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW_ERROR)
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_TRIGGER_NEW_ERROR)
 
 
 @admin()
@@ -79,30 +91,53 @@ def add_global_trigger(bot: Bot, update: Update):
         if trigger is None:
             data = update.message.reply_to_message
             add_global_trigger_db(data, trigger_text)
-            send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW.format(trigger_text))
+            send_async(bot,
+                       chat_id=update.message.chat.id,
+                       text=MSG_TRIGGER_NEW.format(trigger_text))
+
         else:
-            send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_EXISTS.format(trigger_text))
+            send_async(bot,
+                       chat_id=update.message.chat.id,
+                       text=MSG_TRIGGER_EXISTS.format(trigger_text))
+
     else:
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW_ERROR)
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_TRIGGER_NEW_ERROR)
 
 
 @trigger_decorator
 def trigger_show(bot: Bot, update: Update):
     session = Session()
-    trigger = session.query(LocalTrigger).filter_by(chat_id=update.message.chat.id, trigger=update.message.text).first()
+    trigger = session.query(LocalTrigger).filter_by(chat_id=update.message.chat.id,
+                                                    trigger=update.message.text).first()
+
     if trigger is None:
         trigger = session.query(Trigger).filter_by(trigger=update.message.text).first()
+
     if trigger is not None:
         if trigger.message_type == MessageType.AUDIO.value:
             bot.send_audio(update.message.chat.id, trigger.message)
         elif trigger.message_type == MessageType.DOCUMENT.value:
             bot.send_document(update.message.chat.id, trigger.message)
+        elif trigger.message_type == MessageType.PHOTO.value:
+            bot.send_photo(update.message.chat.id, trigger.message)
         elif trigger.message_type == MessageType.VOICE.value:
             bot.send_voice(update.message.chat.id, trigger.message)
         elif trigger.message_type == MessageType.STICKER.value:
             bot.send_sticker(update.message.chat.id, trigger.message)
+        elif trigger.message_type == MessageType.VIDEO.value:
+            bot.send_video(update.message.chat.id, trigger.message)
+        elif trigger.message_type == MessageType.VIDEO_NOTE.value:
+            bot.send_video_note(update.message.chat.id, trigger.message)
+
+        elif trigger.message_type == MessageType.LOCATION.value:
+            msg = trigger.message.replace("'", '"')
+            location = loads(msg)
+            bot.send_location(update.message.chat.id, location['latitude'], location['longitude'])
+
         elif trigger.message_type == MessageType.CONTACT.value:
-            msg = trigger.message.replace('\'', '"')
+            msg = trigger.message.replace("'", '"')
             contact = loads(msg)
             if 'phone_number' not in contact.keys():
                 contact['phone_number'] = None
@@ -110,19 +145,17 @@ def trigger_show(bot: Bot, update: Update):
                 contact['first_name'] = None
             if 'last_name' not in contact.keys():
                 contact['last_name'] = None
-            bot.send_contact(update.message.chat.id, contact['phone_number'], contact['first_name'], contact['last_name'])
-        elif trigger.message_type == MessageType.VIDEO.value:
-            bot.send_video(update.message.chat.id, trigger.message)
-        elif trigger.message_type == MessageType.VIDEO_NOTE.value:
-            bot.send_video_note(update.message.chat.id, trigger.message)
-        elif trigger.message_type == MessageType.LOCATION.value:
-            msg = trigger.message.replace('\'', '"')
-            location = loads(msg)
-            bot.send_location(update.message.chat.id, location['latitude'], location['longitude'])
-        elif trigger.message_type == MessageType.PHOTO.value:
-            bot.send_photo(update.message.chat.id, trigger.message)
+
+            bot.send_contact(update.message.chat.id,
+                             contact['phone_number'],
+                             contact['first_name'],
+                             contact['last_name'])
+
         else:
-            send_async(bot, chat_id=update.message.chat.id, text=trigger.message, disable_web_page_preview=True)
+            send_async(bot,
+                       chat_id=update.message.chat.id,
+                       text=trigger.message,
+                       disable_web_page_preview=True)
 
 
 @admin(adm_type=AdminType.GROUP)

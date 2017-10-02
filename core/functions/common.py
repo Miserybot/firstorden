@@ -6,7 +6,12 @@ from telegram import Update, Bot, ParseMode, TelegramError
 
 from core.functions.triggers import trigger_decorator
 from core.functions.reply_markup import generate_admin_markup
-from core.texts import *
+from core.texts import (
+    MSG_START_WELCOME, MSG_ADMIN_WELCOME,
+    MSG_HELP_GLOBAL_ADMIN, MSG_HELP_GROUP_ADMIN, MSG_HELP_USER,
+    MSG_PING, MSG_STOCK_COMPARE_HARVESTED, MSG_STOCK_COMPARE_FORMAT,
+    MSG_EMPTY, MSG_STOCK_COMPARE_LOST, MSG_STOCK_COMPARE_WAIT
+)
 from core.types import AdminType, Admin, Stock, admin, Session, Group
 from core.utils import send_async, add_user
 
@@ -19,10 +24,9 @@ class StockType(Enum):
     TradeBot = 1
 
 
-def error(bot: Bot, update, error, **kwargs):
+def error(err):
     """ Error handling """
-    LOGGER.error("An error (%s) occurred: %s"
-                 % (type(error), error.message))
+    LOGGER.error("An error (%s) occurred: %s", type(err), err.message)
 
 
 def start(bot: Bot, update: Update):
@@ -35,26 +39,29 @@ def start(bot: Bot, update: Update):
 def admin_panel(bot: Bot, update: Update):
     if update.message.chat.type == 'private':
         session = Session()
-        # FIX: переопределение admin
-        admin = session.query(Admin).filter_by(user_id=update.message.from_user.id).all()
+
+        admins = session.query(Admin).filter_by(user_id=update.message.from_user.id).all()
         full_adm = False
         grp_adm = False
-        for adm in admin:
+        for adm in admins:
             if adm.admin_type <= AdminType.FULL.value:
                 full_adm = True
             else:
                 grp_adm = True
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_ADMIN_WELCOME,
+
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_ADMIN_WELCOME,
                    reply_markup=generate_admin_markup(full_adm, grp_adm))
 
 
-def check_bot_in_chats(bot: Bot, update: Update):
+def check_bot_in_chats(bot: Bot):
     session = Session()
     groups = session.query(Group).filter_by(bot_in_group=True).all()
     for group in groups:
         try:
             bot.getChatMember(group.id, bot.id)
-        except TelegramError as e:
+        except TelegramError:
             group.bot_in_group = False
             session.add(group)
     session.commit()
@@ -69,22 +76,34 @@ def kick(bot: Bot, update: Update):
 def help_msg(bot: Bot, update):
     session = Session()
     admin_user = session.query(Admin).filter_by(user_id=update.message.from_user.id).all()
+
     global_adm = False
     for adm in admin_user:
         if adm.admin_type <= AdminType.FULL.value:
             global_adm = True
             break
+
     if global_adm:
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_HELP_GLOBAL_ADMIN)
-    elif len(admin_user) != 0:
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_HELP_GROUP_ADMIN)
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_HELP_GLOBAL_ADMIN)
+
+    elif admin_user:
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_HELP_GROUP_ADMIN)
+
     else:
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_HELP_USER)
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_HELP_USER)
 
 
 @admin(adm_type=AdminType.GROUP)
 def ping(bot: Bot, update: Update):
-    send_async(bot, chat_id=update.message.chat.id, text=MSG_PING.format(update.message.from_user.username))
+    send_async(bot,
+               chat_id=update.message.chat.id,
+               text=MSG_PING.format(update.message.from_user.username))
 
 
 def get_diff(dict_one, dict_two):
@@ -107,7 +126,7 @@ def get_diff(dict_one, dict_two):
     return resource_diff_add, resource_diff_del
 
 
-def stock_compare(bot: Bot, update: Update, chat_data: dict):
+def stock_compare(bot: Bot, update: Update):
     session = Session()
     old_stock = session.query(Stock).filter_by(user_id=update.message.from_user.id,
                                                stock_type=StockType.Stock.value).order_by(Stock.date.desc()).first()
@@ -118,50 +137,69 @@ def stock_compare(bot: Bot, update: Update, chat_data: dict):
     new_stock.date = datetime.now()
     session.add(new_stock)
     session.commit()
+
     if old_stock is not None:
         resources_old = {}
         resources_new = {}
+
         strings = old_stock.stock.splitlines()
         for string in strings[1:]:
             resource = string.split(' (')
             resource[1] = resource[1][:-1]
             resources_old[resource[0]] = int(resource[1])
+
         strings = new_stock.stock.splitlines()
         for string in strings[1:]:
             resource = string.split(' (')
             resource[1] = resource[1][:-1]
             resources_new[resource[0]] = int(resource[1])
+
         resource_diff_add, resource_diff_del = get_diff(resources_new, resources_old)
         msg = MSG_STOCK_COMPARE_HARVESTED
-        if len(resource_diff_add):
+
+        if resource_diff_add:
             for key, val in resource_diff_add:
                 msg += MSG_STOCK_COMPARE_FORMAT.format(key, val)
         else:
             msg += MSG_EMPTY
+
         msg += MSG_STOCK_COMPARE_LOST
-        if len(resource_diff_del):
+        if resource_diff_del:
             for key, val in resource_diff_del:
                 msg += MSG_STOCK_COMPARE_FORMAT.format(key, val)
         else:
             msg += MSG_EMPTY
-        send_async(bot, chat_id=update.message.chat.id, text=msg, parse_mode=ParseMode.HTML)
+
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=msg,
+                   parse_mode=ParseMode.HTML)
+
     else:
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_STOCK_COMPARE_WAIT)
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_STOCK_COMPARE_WAIT)
 
 
 @admin(adm_type=AdminType.GROUP)
 def delete_msg(bot: Bot, update: Update):
-    bot.delete_message(update.message.reply_to_message.chat_id, update.message.reply_to_message.message_id)
-    bot.delete_message(update.message.reply_to_message.chat_id, update.message.message_id)
+    bot.delete_message(update.message.reply_to_message.chat_id,
+                       update.message.reply_to_message.message_id)
+
+    bot.delete_message(update.message.reply_to_message.chat_id,
+                       update.message.message_id)
 
 
 @admin()
 def delete_user(bot: Bot, update: Update):
-    bot.kickChatMember(update.message.reply_to_message.chat_id, update.message.reply_to_message.from_user.id)
-    bot.unbanChatMember(update.message.reply_to_message.chat_id, update.message.reply_to_message.from_user.id)
+    bot.kickChatMember(update.message.reply_to_message.chat_id,
+                       update.message.reply_to_message.from_user.id)
+
+    bot.unbanChatMember(update.message.reply_to_message.chat_id,
+                        update.message.reply_to_message.from_user.id)
 
 
-def trade_compare(bot: Bot, update: Update, chat_data: dict):
+def trade_compare(bot: Bot, update: Update):
     session = Session()
     old_stock = session.query(Stock).filter_by(user_id=update.message.from_user.id,
                                                stock_type=StockType.TradeBot.value).order_by(Stock.date.desc()).first()
@@ -189,17 +227,27 @@ def trade_compare(bot: Bot, update: Update, chat_data: dict):
                 items_new[item[0]] = int(item[1])
         resource_diff_add, resource_diff_del = get_diff(items_new, items_old)
         msg = MSG_STOCK_COMPARE_HARVESTED
-        if len(resource_diff_add):
+
+        if resource_diff_add:
             for key, val in resource_diff_add:
                 msg += MSG_STOCK_COMPARE_FORMAT.format(key, val)
         else:
             msg += MSG_EMPTY
+
         msg += MSG_STOCK_COMPARE_LOST
-        if len(resource_diff_del):
+
+        if resource_diff_del:
             for key, val in resource_diff_del:
                 msg += MSG_STOCK_COMPARE_FORMAT.format(key, val)
         else:
             msg += MSG_EMPTY
-        send_async(bot, chat_id=update.message.chat.id, text=msg, parse_mode=ParseMode.HTML)
+
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=msg,
+                   parse_mode=ParseMode.HTML)
+
     else:
-        send_async(bot, chat_id=update.message.chat.id, text=MSG_STOCK_COMPARE_WAIT)
+        send_async(bot,
+                   chat_id=update.message.chat.id,
+                   text=MSG_STOCK_COMPARE_WAIT)
