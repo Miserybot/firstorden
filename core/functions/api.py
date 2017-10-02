@@ -3,6 +3,7 @@ import json
 
 import flask
 from werkzeug.routing import IntegerConverter as BaseIntegerConverter
+from sqlalchemy.exc import SQLAlchemyError
 
 from core.types import Order, Session, Squad, SquadMember, OrderCleared
 
@@ -35,7 +36,7 @@ def new_ready_to_battle(chat_id):
         return flask.Response(status=200,
                               mimetype="application/json",
                               response=json.dumps({'order_id': order.id}))
-    except Exception:
+    except SQLAlchemyError:
         Session.rollback()
         return flask.Response(status=400)
 
@@ -75,7 +76,7 @@ def new_order_click(order_id, user_id):
 
         return flask.Response(status=200)
 
-    except Exception:
+    except SQLAlchemyError:
         Session.rollback()
         return flask.Response(status=400)
 
@@ -97,6 +98,6 @@ def order_status(order_id):
                                   mimetype="application/json",
                                   response=json.dumps({'users': users}))
 
-    except Exception:
+    except SQLAlchemyError:
         Session.rollback()
         return flask.Response(status=400)

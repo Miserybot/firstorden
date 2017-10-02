@@ -8,24 +8,27 @@ from core.texts import (
     MSG_TRIGGER_DEL, MSG_TRIGGER_DEL_ERROR,
     MSG_TRIGGER_LIST_HEADER, MSG_EMPTY
 )
-from core.types import Trigger, AdminType, admin, Session, MessageType, LocalTrigger
+from core.types import (
+    AdminType, LocalTrigger, MessageType, Trigger, 
+    admin_allowed, check_admin, user_allowed
+)
 from core.utils import send_async, update_group
 
 
 def trigger_decorator(func):
-    def wrapper(bot, update, *args, **kwargs):
-        group = update_group(update.message.chat)
-        if group is None:
-            ((admin(adm_type=AdminType.FULL))(func))(bot, update, *args, **kwargs)
-        elif group.allow_trigger_all:
-            func(bot, update, *args, **kwargs)
-        else:
-            ((admin(adm_type=AdminType.GROUP))(func))(bot, update, *args, **kwargs)
+    @user_allowed
+    def wrapper(bot, update, session, *args, **kwargs):
+        group = update_group(update.message.chat, session)
+        if group is None and \
+                check_admin(update, session, AdminType.FULL) or \
+                group is not None and \
+                (group.allow_trigger_all or
+                 check_admin(update, session, AdminType.GROUP)):
+            func(bot, update, session, *args, **kwargs)
     return wrapper
 
 
-def add_global_trigger_db(msg: Message, trigger_text: str):
-    session = Session()
+def add_global_trigger_db(msg: Message, trigger_text: str, session):
     trigger = session.query(Trigger).filter_by(trigger=trigger_text).first()
     if trigger is None:
         trigger = Trigger()
@@ -64,13 +67,13 @@ def add_global_trigger_db(msg: Message, trigger_text: str):
     session.commit()
 
 
-@admin()
-def set_global_trigger(bot: Bot, update: Update):
+@admin_allowed()
+def set_global_trigger(bot: Bot, update: Update, session):
     msg = update.message.text.split(' ', 1)
     if len(msg) == 2 and len(msg[1]) > 0 and update.message.reply_to_message:
         trigger = msg[1].strip()
         data = update.message.reply_to_message
-        add_global_trigger_db(data, trigger)
+        add_global_trigger_db(data, trigger, session)
         send_async(bot,
                    chat_id=update.message.chat.id,
                    text=MSG_TRIGGER_NEW.format(trigger))
@@ -81,16 +84,15 @@ def set_global_trigger(bot: Bot, update: Update):
                    text=MSG_TRIGGER_NEW_ERROR)
 
 
-@admin()
-def add_global_trigger(bot: Bot, update: Update):
+@admin_allowed()
+def add_global_trigger(bot: Bot, update: Update, session):
     msg = update.message.text.split(' ', 1)
     if len(msg) == 2 and len(msg[1]) > 0 and update.message.reply_to_message:
         trigger_text = msg[1].strip()
-        session = Session()
         trigger = session.query(Trigger).filter_by(trigger=trigger_text).first()
         if trigger is None:
             data = update.message.reply_to_message
-            add_global_trigger_db(data, trigger_text)
+            add_global_trigger_db(data, trigger_text, session)
             send_async(bot,
                        chat_id=update.message.chat.id,
                        text=MSG_TRIGGER_NEW.format(trigger_text))
@@ -107,8 +109,7 @@ def add_global_trigger(bot: Bot, update: Update):
 
 
 @trigger_decorator
-def trigger_show(bot: Bot, update: Update):
-    session = Session()
+def trigger_show(bot: Bot, update: Update, session):
     trigger = session.query(LocalTrigger).filter_by(chat_id=update.message.chat.id,
                                                     trigger=update.message.text).first()
 
@@ -150,7 +151,6 @@ def trigger_show(bot: Bot, update: Update):
                              contact['phone_number'],
                              contact['first_name'],
                              contact['last_name'])
-
         else:
             send_async(bot,
                        chat_id=update.message.chat.id,
@@ -158,30 +158,27 @@ def trigger_show(bot: Bot, update: Update):
                        disable_web_page_preview=True)
 
 
-@admin(adm_type=AdminType.GROUP)
-def enable_global_trigger_all(bot: Bot, update: Update):
-    session = Session()
-    group = update_group(update.message.chat)
+@admin_allowed(adm_type=AdminType.GROUP)
+def enable_global_trigger_all(bot: Bot, update: Update, session):
+    group = update_group(update.message.chat, session)
     group.allow_trigger_all = True
     session.add(group)
     session.commit()
     send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_ALL_ENABLED)
 
 
-@admin(adm_type=AdminType.GROUP)
-def disable_global_trigger_all(bot: Bot, update: Update):
-    session = Session()
-    group = update_group(update.message.chat)
+@admin_allowed(adm_type=AdminType.GROUP)
+def disable_global_trigger_all(bot: Bot, update: Update, session):
+    group = update_group(update.message.chat, session)
     group.allow_trigger_all = False
     session.add(group)
     session.commit()
     send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_ALL_DISABLED)
 
 
-@admin()
-def del_global_trigger(bot: Bot, update: Update):
+@admin_allowed()
+def del_global_trigger(bot: Bot, update: Update, session):
     msg = update.message.text.split(' ', 1)[1]
-    session = Session()
     trigger = session.query(Trigger).filter_by(trigger=msg).first()
     if trigger is not None:
         session.delete(trigger)
@@ -192,8 +189,7 @@ def del_global_trigger(bot: Bot, update: Update):
 
 
 @trigger_decorator
-def list_triggers(bot: Bot, update: Update):
-    session = Session()
+def list_triggers(bot: Bot, update: Update, session):
     triggers = session.query(Trigger).all()
     local_triggers = session.query(LocalTrigger).filter_by(chat_id=update.message.chat.id).all()
     msg = MSG_TRIGGER_LIST_HEADER + \
@@ -202,8 +198,7 @@ def list_triggers(bot: Bot, update: Update):
     send_async(bot, chat_id=update.message.chat.id, text=msg)
 
 
-def add_trigger_db(msg: Message, chat, trigger_text: str):
-    session = Session()
+def add_trigger_db(msg: Message, chat, trigger_text: str, session):
     trigger = session.query(LocalTrigger).filter_by(chat_id=chat.id, trigger=trigger_text).first()
     if trigger is None:
         trigger = LocalTrigger()
@@ -243,28 +238,27 @@ def add_trigger_db(msg: Message, chat, trigger_text: str):
     session.commit()
 
 
-@admin(adm_type=AdminType.GROUP)
-def set_trigger(bot: Bot, update: Update):
+@admin_allowed(adm_type=AdminType.GROUP)
+def set_trigger(bot: Bot, update: Update, session):
     msg = update.message.text.split(' ', 1)
     if len(msg) == 2 and len(msg[1]) > 0 and update.message.reply_to_message:
         trigger = msg[1].strip()
         data = update.message.reply_to_message
-        add_trigger_db(data, update.message.chat, trigger)
+        add_trigger_db(data, update.message.chat, trigger, session)
         send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW.format(trigger))
     else:
         send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW_ERROR)
 
 
-@admin(adm_type=AdminType.GROUP)
-def add_trigger(bot: Bot, update: Update):
+@admin_allowed(adm_type=AdminType.GROUP)
+def add_trigger(bot: Bot, update: Update, session):
     msg = update.message.text.split(' ', 1)
     if len(msg) == 2 and len(msg[1]) > 0 and update.message.reply_to_message:
         trigger_text = msg[1].strip()
-        session = Session()
         trigger = session.query(LocalTrigger).filter_by(chat_id=update.message.chat.id, trigger=trigger_text).first()
         if trigger is None:
             data = update.message.reply_to_message
-            add_trigger_db(data, update.message.chat, trigger_text)
+            add_trigger_db(data, update.message.chat, trigger_text, session)
             send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW.format(trigger_text))
         else:
             send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_EXISTS.format(trigger_text))
@@ -272,30 +266,27 @@ def add_trigger(bot: Bot, update: Update):
         send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_NEW_ERROR)
 
 
-@admin(adm_type=AdminType.GROUP)
-def enable_trigger_all(bot: Bot, update: Update):
-    session = Session()
-    group = update_group(update.message.chat)
+@admin_allowed(adm_type=AdminType.GROUP)
+def enable_trigger_all(bot: Bot, update: Update, session):
+    group = update_group(update.message.chat, session)
     group.allow_trigger_all = True
     session.add(group)
     session.commit()
     send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_ALL_ENABLED)
 
 
-@admin(adm_type=AdminType.GROUP)
-def disable_trigger_all(bot: Bot, update: Update):
-    session = Session()
-    group = update_group(update.message.chat)
+@admin_allowed(adm_type=AdminType.GROUP)
+def disable_trigger_all(bot: Bot, update: Update, session):
+    group = update_group(update.message.chat, session)
     group.allow_trigger_all = False
     session.add(group)
     session.commit()
     send_async(bot, chat_id=update.message.chat.id, text=MSG_TRIGGER_ALL_DISABLED)
 
 
-@admin(adm_type=AdminType.GROUP)
-def del_trigger(bot: Bot, update: Update):
+@admin_allowed(adm_type=AdminType.GROUP)
+def del_trigger(bot: Bot, update: Update, session):
     msg = update.message.text.split(' ', 1)[1]
-    session = Session()
     trigger = session.query(LocalTrigger).filter_by(trigger=msg).first()
     if trigger is not None:
         session.delete(trigger)
