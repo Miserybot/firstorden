@@ -3,7 +3,6 @@ from enum import Enum
 import json
 from json import loads
 import logging
-from multiprocessing.pool import ThreadPool
 
 from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup, TelegramError
 from telegram.ext.dispatcher import run_async
@@ -14,10 +13,11 @@ from core.template import fill_char_template
 from core.types import (
     User, Group, Admin, admin_allowed, Order, OrderGroup,
     OrderGroupItem, OrderCleared, Squad, user_allowed,
-    Character, SquadMember, MessageType, AdminType,
-    Session)
+    Character, SquadMember, MessageType, AdminType)
 from core.texts import *
 from core.utils import send_async, update_group, add_user
+
+from sqlalchemy import func
 
 
 LOGGER = logging.getLogger('MyApp')
@@ -205,12 +205,19 @@ def generate_profile_buttons(user):
     return InlineKeyboardMarkup(inline_keys)
 
 
-def generate_squad_list_key(squad):
+def generate_squad_list_key(squad, session):
     attack = 0
     defence = 0
     members = squad.members
+    user_ids = []
     for member in members:
-        character = member.user.character
+        user_ids.append(member.user_id)
+    actual_profiles = session.query(Character.user_id, func.max(Character.date)).\
+        filter(Character.user_id.in_(user_ids)).\
+        group_by(Character.user_id).all()
+    characters = session.query(Character).filter(Character.user_id.in_([a[0] for a in actual_profiles]),
+                                                 Character.date.in_([a[1] for a in actual_profiles])).all()
+    for character in characters:
         attack += character.attack
         defence += character.defence
     return [InlineKeyboardButton(
@@ -223,10 +230,10 @@ def generate_squad_list_key(squad):
         callback_data=json.dumps({'t': QueryType.MemberList.value, 'id': squad.chat_id}))]
 
 
-def generate_squad_list(squads):
+def generate_squad_list(squads, session):
     inline_keys = []
     for squad in squads:
-        inline_keys.append(generate_squad_list_key(squad))
+        inline_keys.append(generate_squad_list_key(squad, session))
     return InlineKeyboardMarkup(inline_keys)
 
 
@@ -247,19 +254,25 @@ def generate_squad_request(session):
     return InlineKeyboardMarkup(inline_keys)
 
 
-def generate_squad_members(members):
+def generate_squad_members(members, session):
     inline_keys = []
+    user_ids = []
     for member in members:
-        user = member.user
-        character = user.character
+        user_ids.append(member.user_id)
+    actual_profiles = session.query(Character.user_id, func.max(Character.date)). \
+        filter(Character.user_id.in_(user_ids)). \
+        group_by(Character.user_id).all()
+    characters = session.query(Character).filter(Character.user_id.in_([a[0] for a in actual_profiles]),
+                                                 Character.date.in_([a[1] for a in actual_profiles])).all()
+    for character in characters:
         inline_keys.append(
             [InlineKeyboardButton('{}: {}⚔ {}🛡'.
-                                  format(user,
+                                  format(character.name,
                                          character.attack,
                                          character.defence),
                                   callback_data=json.dumps(
                                       {'t': QueryType.ShowHero.value,
-                                       'id': member.user_id}
+                                       'id': character.user_id}
                                   ))])
     return InlineKeyboardMarkup(inline_keys)
 
@@ -548,7 +561,7 @@ def callback_query(bot: Bot, update: Update, session, chat_data: dict):
                             reply_markup=generate_profile_buttons(user))
     elif data['t'] == QueryType.MemberList.value:
         squad = session.query(Squad).filter_by(chat_id=data['id']).first()
-        markup = generate_squad_members(squad.members)
+        markup = generate_squad_members(squad.members, session)
         bot.editMessageText(squad.squad_name,
                             update.callback_query.message.chat.id,
                             update.callback_query.message.message_id,
