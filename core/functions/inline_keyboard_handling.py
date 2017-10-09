@@ -276,9 +276,20 @@ def generate_squad_members(members, session):
                                                  Character.date.in_([a[1] for a in actual_profiles]))\
         .order_by(Character.level.desc()).all()
     for character in characters:
+        time_passed = datetime.now() - character.date
+        status_emoji = ''
+        if time_passed > timedelta(days=7):
+            status_emoji = '⁉'
+        if time_passed > timedelta(days=4):
+            status_emoji = '‼'
+        if time_passed > timedelta(days=3):
+            status_emoji = '❗'
+        elif time_passed < timedelta(days=1):
+            status_emoji = '🕐'
         inline_keys.append(
-            [InlineKeyboardButton('{}: {}⚔ {}🛡 {}🏅'.
-                                  format(character.name,
+            [InlineKeyboardButton('{}{}: {}⚔ {}🛡 {}🏅'.
+                                  format(status_emoji,
+                                         character.name,
                                          character.attack,
                                          character.defence,
                                          character.level),
@@ -327,42 +338,46 @@ def generate_fire_up(members):
 
 @run_async
 def send_order(bot, order, order_type, chat_id, markup):
-    msg_sent = None
-    if order_type == MessageType.AUDIO.value:
-        msg_sent = bot.send_audio(chat_id, order, reply_markup=markup)
-    elif order_type == MessageType.DOCUMENT.value:
-        msg_sent = bot.send_document(chat_id, order, reply_markup=markup)
-    elif order_type == MessageType.VOICE.value:
-        msg_sent = bot.send_voice(chat_id, order, reply_markup=markup)
-    elif order_type == MessageType.STICKER.value:
-        msg_sent = bot.send_sticker(chat_id, order, reply_markup=markup)
-    elif order_type == MessageType.CONTACT.value:
-        msg = order.replace('\'', '"')
-        contact = loads(msg)
-        if 'phone_number' not in contact.keys():
-            contact['phone_number'] = None
-        if 'first_name' not in contact.keys():
-            contact['first_name'] = None
-        if 'last_name' not in contact.keys():
-            contact['last_name'] = None
-            msg_sent = bot.send_contact(chat_id,
-                                        contact['phone_number'],
-                                        contact['first_name'],
-                                        contact['last_name'],
-                                        reply_markup=markup)
-    elif order_type == MessageType.VIDEO.value:
-        msg_sent = bot.send_video(chat_id, order, reply_markup=markup)
-    elif order_type == MessageType.VIDEO_NOTE.value:
-        msg_sent = bot.send_video_note(chat_id, order, reply_markup=markup)
-    elif order_type == MessageType.LOCATION.value:
-        msg = order.replace('\'', '"')
-        location = loads(msg)
-        msg_sent = bot.send_location(chat_id, location['latitude'], location['longitude'], reply_markup=markup)
-    elif order_type == MessageType.PHOTO.value:
-        msg_sent = bot.send_photo(chat_id, order, reply_markup=markup)
-    else:
-        msg_sent = send_async(bot, chat_id=chat_id, text=order, disable_web_page_preview=True, reply_markup=markup)
-    return msg_sent
+    try:
+        msg_sent = None
+        if order_type == MessageType.AUDIO.value:
+            msg_sent = bot.send_audio(chat_id, order, reply_markup=markup)
+        elif order_type == MessageType.DOCUMENT.value:
+            msg_sent = bot.send_document(chat_id, order, reply_markup=markup)
+        elif order_type == MessageType.VOICE.value:
+            msg_sent = bot.send_voice(chat_id, order, reply_markup=markup)
+        elif order_type == MessageType.STICKER.value:
+            msg_sent = bot.send_sticker(chat_id, order, reply_markup=markup)
+        elif order_type == MessageType.CONTACT.value:
+            msg = order.replace('\'', '"')
+            contact = loads(msg)
+            if 'phone_number' not in contact.keys():
+                contact['phone_number'] = None
+            if 'first_name' not in contact.keys():
+                contact['first_name'] = None
+            if 'last_name' not in contact.keys():
+                contact['last_name'] = None
+                msg_sent = bot.send_contact(chat_id,
+                                            contact['phone_number'],
+                                            contact['first_name'],
+                                            contact['last_name'],
+                                            reply_markup=markup)
+        elif order_type == MessageType.VIDEO.value:
+            msg_sent = bot.send_video(chat_id, order, reply_markup=markup)
+        elif order_type == MessageType.VIDEO_NOTE.value:
+            msg_sent = bot.send_video_note(chat_id, order, reply_markup=markup)
+        elif order_type == MessageType.LOCATION.value:
+            msg = order.replace('\'', '"')
+            location = loads(msg)
+            msg_sent = bot.send_location(chat_id, location['latitude'], location['longitude'], reply_markup=markup)
+        elif order_type == MessageType.PHOTO.value:
+            msg_sent = bot.send_photo(chat_id, order, reply_markup=markup)
+        else:
+            msg_sent = send_async(bot, chat_id=chat_id, text=order, disable_web_page_preview=True, reply_markup=markup)
+        return msg_sent
+    except TelegramError as err:
+        bot.logger.error(err.message)
+        return None
 
 
 @run_async
@@ -410,7 +425,7 @@ def callback_query(bot: Bot, update: Update, session, chat_data: dict):
             session.add(order)
             session.commit()
             markup = generate_ok_markup(order.id, 0)
-            msg = send_order(bot, order.text, order_type, order.chat_id, markup).result().result()
+            msg = send_order(bot, order.text, order_type, order.chat_id, markup).result()
             if order_pin and msg:
                 try:
                     bot.request.post(bot.base_url + '/pinChatMessage', {'chat_id': order.chat_id,

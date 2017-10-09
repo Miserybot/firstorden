@@ -7,6 +7,7 @@ from core.texts import *
 
 @admin_allowed(adm_type=AdminType.GROUP)
 def order(bot: Bot, update: Update, session, chat_data):
+    chat_data['order_wait'] = False
     admin_user = session.query(Admin).filter(Admin.user_id == update.message.from_user.id).all()
     markup = generate_order_groups_markup(session, admin_user, chat_data['pin'] if 'pin' in chat_data else True)
     msg = update.message
@@ -47,4 +48,5 @@ def order(bot: Bot, update: Update, session, chat_data):
 @admin_allowed(adm_type=AdminType.GROUP)
 def orders(bot: Bot, update: Update, session, chat_data):
     markup = generate_flag_orders()
+    chat_data['order_wait'] = True
     send_async(bot, chat_id=update.message.chat.id, text=MSG_FLAG_CHOOSE_HEADER, reply_markup=markup)

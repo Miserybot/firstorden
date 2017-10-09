@@ -16,6 +16,9 @@ from telegram.ext.dispatcher import run_async
 from telegram.error import TelegramError
 
 from config import TOKEN, GOVERNMENT_CHAT
+from core.commands import ADMIN_COMMAND_STATUS, ADMIN_COMMAND_RECRUIT, ADMIN_COMMAND_ORDER, ADMIN_COMMAND_SQUAD_LIST, \
+    ADMIN_COMMAND_GROUPS, ADMIN_COMMAND_FIRE_UP, USER_COMMAND_ME, USER_COMMAND_BUILD, USER_COMMAND_CONTACTS, \
+    USER_COMMAND_SQUAD, USER_COMMAND_STATISTICS, USER_COMMAND_TOP, USER_COMMAND_SQUAD_REQUEST, USER_COMMAND_BACK
 from core.functions.activity import (
     day_activity, week_activity, battle_activity
 )
@@ -30,8 +33,8 @@ from core.functions.orders import order, orders
 from core.functions.common import (
     help_msg, ping, start, error, kick,
     admin_panel, stock_compare, trade_compare,
-    delete_msg, delete_user
-)
+    delete_msg, delete_user,
+    user_panel)
 from core.functions.inline_keyboard_handling import (
     callback_query, send_status, send_order, QueryType
 )
@@ -55,7 +58,7 @@ from core.functions.welcome import (
 from core.regexp import PROFILE, HERO
 from core.texts import (
     MSG_SQUAD_READY, MSG_FULL_TEXT_LINE, MSG_FULL_TEXT_TOTAL,
-    MSG_MAIN_INLINE_BATTLE, MSG_MAIN_READY_TO_BATTLE)
+    MSG_MAIN_INLINE_BATTLE, MSG_MAIN_READY_TO_BATTLE, MSG_IN_DEV)
 from core.types import Session, Order, Squad, Admin, user_allowed
 from core.utils import add_user, send_async
 
@@ -171,23 +174,61 @@ def manage_all(bot: Bot, update: Update, session, chat_data, job_queue):
             trigger_show(bot, update)
 
     elif update.message.chat.type == 'private':
-        if update.message.text:
+        admin = session.query(Admin).filter_by(user_id=update.message.from_user.id).all()
+        is_admin = False
+        for _ in admin:
+            is_admin = True
+            break
+
+        if 'order_wait' in chat_data and chat_data['order_wait']:
+            order(bot, update, chat_data)
+
+        elif update.message.text:
             text = update.message.text.lower()
 
-            if text == 'статус':
+            if text == ADMIN_COMMAND_STATUS.lower():
                 send_status(bot, update)
-            elif text == 'хочу в отряд':
+            elif text == USER_COMMAND_BACK.lower():
+                user_panel(bot, update)
+            elif text == USER_COMMAND_SQUAD_REQUEST.lower():
                 squad_request(bot, update)
-            elif text == 'заявки в отряд':
+            elif text == ADMIN_COMMAND_RECRUIT.lower():
                 list_squad_requests(bot, update)
-            elif text in ['приказы', 'пин']:
+            elif text == ADMIN_COMMAND_ORDER.lower():
                 orders(bot, update, chat_data)
-            elif text in ['список отряда', 'список']:
+            elif text == ADMIN_COMMAND_SQUAD_LIST.lower():
                 squad_list(bot, update)
-            elif text == 'группы':
+            elif text == ADMIN_COMMAND_GROUPS.lower():
                 group_list(bot, update)
-            elif text == 'чистка отряда':
+            elif text == ADMIN_COMMAND_FIRE_UP.lower():
                 remove_from_squad(bot, update)
+            elif text == USER_COMMAND_ME.lower():
+                char_show(bot, update)
+            elif text == USER_COMMAND_BUILD.lower():
+                send_async(bot,
+                           chat_id=update.message.chat.id,
+                           text=MSG_IN_DEV,
+                           parse_mode=ParseMode.HTML)
+            elif text == USER_COMMAND_TOP.lower():
+                send_async(bot,
+                           chat_id=update.message.chat.id,
+                           text=MSG_IN_DEV,
+                           parse_mode=ParseMode.HTML)
+            elif text == USER_COMMAND_STATISTICS.lower():
+                send_async(bot,
+                           chat_id=update.message.chat.id,
+                           text=MSG_IN_DEV,
+                           parse_mode=ParseMode.HTML)
+            elif text == USER_COMMAND_SQUAD.lower():
+                send_async(bot,
+                           chat_id=update.message.chat.id,
+                           text=MSG_IN_DEV,
+                           parse_mode=ParseMode.HTML)
+            elif text == USER_COMMAND_CONTACTS.lower():
+                send_async(bot,
+                           chat_id=update.message.chat.id,
+                           text=MSG_IN_DEV,
+                           parse_mode=ParseMode.HTML)
             elif 'wait_group_name' in chat_data and chat_data['wait_group_name']:
                 add_group(bot, update, chat_data)
 
@@ -203,8 +244,12 @@ def manage_all(bot: Bot, update: Update, session, chat_data, job_queue):
                 elif from_id == TRADEBOT_ID:
                     if '📦твой склад с материалами:' in text:
                         trade_compare(bot, update, chat_data)
+            elif not is_admin:
+                user_panel(bot, update)
             else:
                 order(bot, update, chat_data)
+        elif not is_admin:
+            user_panel(bot, update)
         else:
             order(bot, update, chat_data)
 
@@ -310,7 +355,7 @@ def main():
     disp = updater.dispatcher
 
     # on different commands - answer in Telegram
-    disp.add_handler(CommandHandler("start", start))
+    disp.add_handler(CommandHandler("start", user_panel))
     disp.add_handler(CommandHandler("admin", admin_panel))
     disp.add_handler(CommandHandler("help", help_msg))
     disp.add_handler(CommandHandler("ping", ping))
