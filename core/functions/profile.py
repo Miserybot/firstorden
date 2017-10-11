@@ -9,6 +9,8 @@ import re
 from core.template import fill_char_template
 from core.texts import *
 
+from config import CASTLE
+
 
 def parse_profile(profile, user_id, date, session):
     parsed_data = re.search(PROFILE, profile)
@@ -135,11 +137,14 @@ def char_update(bot: Bot, update: Update, session):
                                  update.message.from_user.id,
                                  update.message.forward_date,
                                  session)
-        if char and char.castle == '🇰🇮':
-            send_async(bot, chat_id=update.message.chat.id, text=MSG_PROFILE_SAVED.format(char.name))
+        if CASTLE:
+            if char and char.castle == CASTLE:
+                send_async(bot, chat_id=update.message.chat.id, text=MSG_PROFILE_SAVED.format(char.name))
+            else:
+                send_async(bot, chat_id=update.message.chat.id,
+                           text=MSG_PROFILE_CASTLE_MISTAKE)
         else:
-            send_async(bot, chat_id=update.message.chat.id,
-                       text=MSG_PROFILE_CASTLE_MISTAKE)
+            send_async(bot, chat_id=update.message.chat.id, text=MSG_PROFILE_SAVED.format(char.name))
 
 
 @user_allowed
@@ -148,7 +153,12 @@ def char_show(bot: Bot, update: Update, session):
         user = session.query(User).filter_by(id=update.message.from_user.id).first()
         if user is not None and user.character is not None:
             char = user.character
-            if char.castle == '🇰🇮':
+            if CASTLE:
+                if char.castle == CASTLE:
+                    text = fill_char_template(MSG_PROFILE_SHOW_FORMAT, user, char)
+                    btns = generate_profile_buttons(user)
+                    send_async(bot, chat_id=update.message.chat.id, text=text, reply_markup=btns)
+            else:
                 text = fill_char_template(MSG_PROFILE_SHOW_FORMAT, user, char)
                 btns = generate_profile_buttons(user)
                 send_async(bot, chat_id=update.message.chat.id, text=text, reply_markup=btns)
