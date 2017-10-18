@@ -98,9 +98,17 @@ MSG_PROFILE_SHOW_FORMAT = '👤 %first_name% %last_name% (%username%)\n' \
                           '%pet%\n' \
                           '🕑 Последнее обновление %date%'
 
-# main.py texts
-MSG_MAIN_INLINE_BATTLE = 'ГРАБЬНАСИЛУЙУБИВАЙ!'
-MSG_MAIN_READY_TO_BATTLE = 'К битве готовсь!'
+# ---main.py texts-------
+MSG_MAIN_INLINE_BATTLE = 'К битве готов!'
+MSG_MAIN_READY_TO_BATTLE = ''''
+🔥СКОРО БИТВА🔥
+
+· ВСЕМ ВСТАТЬ В 🛡ЗАЩИТУ❗️
+· СЛИТЬ 💰ЗОЛОТО❗️
+· ЖДАТЬ ПРИКАЗА❗️
+
+🔥ОСТАЛОСЬ 10 МИНУТ🔥
+'''
 # -----------------------
 
 MSG_REPORT_OLD = 'Твой репорт уже попахивает, в следующий раз постарайся прислать его в течении минуты после получения.'
