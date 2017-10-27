@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import json
 import logging
 import re
 
+from sqlalchemy import func, tuple_
 from telegram import (
     Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 )
@@ -15,7 +16,7 @@ from telegram.ext import (
 from telegram.ext.dispatcher import run_async
 from telegram.error import TelegramError
 
-from config import TOKEN, GOVERNMENT_CHAT
+from config import TOKEN, GOVERNMENT_CHAT, CASTLE
 from core.commands import ADMIN_COMMAND_STATUS, ADMIN_COMMAND_RECRUIT, ADMIN_COMMAND_ORDER, ADMIN_COMMAND_SQUAD_LIST, \
     ADMIN_COMMAND_GROUPS, ADMIN_COMMAND_FIRE_UP, USER_COMMAND_ME, USER_COMMAND_BUILD, USER_COMMAND_CONTACTS, \
     USER_COMMAND_SQUAD, USER_COMMAND_STATISTICS, USER_COMMAND_TOP, USER_COMMAND_SQUAD_REQUEST, USER_COMMAND_BACK, \
@@ -27,6 +28,7 @@ from core.functions.admins import (
     list_admins, admins_for_users, set_admin, del_admin,
     set_global_admin, set_super_admin, del_global_admin
 )
+from core.functions.ban import unban, ban
 from core.functions.bosses import (
     boss_leader, boss_zhalo, boss_monoeye, boss_hydra)
 from core.functions.orders import order, orders
@@ -41,7 +43,8 @@ from core.functions.inline_keyboard_handling import (
 )
 from core.functions.order_groups import group_list, add_group
 from core.functions.pin import pin, not_pin_all, pin_all, silent_pin
-from core.functions.profile import char_update, char_show, find_by_username, report_received
+from core.functions.profile import char_update, char_show, find_by_username, report_received, build_report_received, \
+    repair_report_received
 from core.functions.squad import (
     add_squad, del_squad, set_invite_link, set_squad_name,
     enable_thorns, disable_thorns,
@@ -58,11 +61,12 @@ from core.functions.triggers import (
 from core.functions.welcome import (
     welcome, set_welcome, show_welcome, enable_welcome, disable_welcome
 )
-from core.regexp import PROFILE, HERO, REPORT
+from core.regexp import PROFILE, HERO, REPORT, BUILD_REPORT, REPAIR_REPORT
 from core.texts import (
     MSG_SQUAD_READY, MSG_FULL_TEXT_LINE, MSG_FULL_TEXT_TOTAL,
-    MSG_MAIN_INLINE_BATTLE, MSG_MAIN_READY_TO_BATTLE, MSG_IN_DEV)
-from core.types import Session, Order, Squad, Admin, user_allowed
+    MSG_MAIN_INLINE_BATTLE, MSG_MAIN_READY_TO_BATTLE, MSG_IN_DEV, MSG_UPDATE_PROFILE, MSG_SQUAD_DELETE_OUTDATED,
+    MSG_SQUAD_DELETE_OUTDATED_EXT)
+from core.types import Session, Order, Squad, Admin, user_allowed, Character, SquadMember
 from core.utils import add_user, send_async
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -175,8 +179,6 @@ def manage_all(bot: Bot, update: Update, session, chat_data, job_queue):
         elif 'твои результаты в бою:' in text:
             if update.message.forward_from.id == CWBOT_ID:
                 report_received(bot, update)
-                job_queue.run_once(del_msg, 2, (update.message.chat.id,
-                                                update.message.message_id))
         else:
             trigger_show(bot, update)
 
@@ -250,7 +252,10 @@ def manage_all(bot: Bot, update: Update, session, chat_data, job_queue):
                         char_update(bot, update)
                     elif re.search(REPORT, update.message.text):
                         report_received(bot, update)
-
+                    elif re.search(BUILD_REPORT, update.message.text):
+                        build_report_received(bot, update)
+                    elif re.search(REPAIR_REPORT, update.message.text):
+                        repair_report_received(bot, update)
                 elif from_id == TRADEBOT_ID:
                     if '📦твой склад с материалами:' in text:
                         trade_compare(bot, update, chat_data)
@@ -361,7 +366,42 @@ def ready_to_battle_result(bot: Bot, job_queue):
 def fresh_profiles(bot: Bot, job_queue):
     session = Session()
     try:
-        pass
+        actual_profiles = session.query(Character.user_id, func.max(Character.date)). \
+            group_by(Character.user_id)
+        actual_profiles = actual_profiles.all()
+        characters = session.query(Character).filter(tuple_(Character.user_id, Character.date)
+                                                     .in_([(a[0], a[1]) for a in actual_profiles]),
+                                                     datetime.now() - timedelta(days=3) > Character.date,
+                                                     Character.date > datetime.now() - timedelta(days=14))
+        if CASTLE:
+            characters = characters.filter_by(castle=CASTLE)
+        characters = characters.all()
+        for character in characters:
+            send_async(bot,
+                       chat_id=character.user_id,
+                       text=MSG_UPDATE_PROFILE,
+                       parse_mode=ParseMode.HTML)
+        characters = session.query(Character).filter(tuple_(Character.user_id, Character.date)
+                                                     .in_([(a[0], a[1]) for a in actual_profiles]),
+                                                     Character.date < datetime.now() - timedelta(days=14)).all()
+        members = session.query(SquadMember).filter(SquadMember.user_id
+                                                    .in_([character.user_id for character in characters])).all()
+        for member in members:
+            session.delete(member)
+            admins = session.query(Admin).filter_by(admin_group=member.squad_id).all()
+            for adm in admins:
+                send_async(bot, chat_id=adm.user_id,
+                           text=MSG_SQUAD_DELETE_OUTDATED_EXT
+                           .format(member.user.character.name, member.squad.squad_name),
+                           parse_mode=ParseMode.HTML)
+            send_async(bot, chat_id=member.squad_id,
+                       text=MSG_SQUAD_DELETE_OUTDATED_EXT.format(member.user.character.name, member.squad.squad_name),
+                       parse_mode=ParseMode.HTML)
+            send_async(bot,
+                       chat_id=member.user_id,
+                       text=MSG_SQUAD_DELETE_OUTDATED,
+                       parse_mode=ParseMode.HTML)
+        session.commit()
     except SQLAlchemyError as err:
         bot.logger.error(str(err))
         Session.rollback()
@@ -409,6 +449,8 @@ def main():
     disp.add_handler(CommandHandler("set_invite_link", set_invite_link))
     disp.add_handler(CommandHandler("find", find_by_username))
     disp.add_handler(CommandHandler("add", add_to_squad))
+    disp.add_handler(CommandHandler("ban", ban))
+    disp.add_handler(CommandHandler("unban", unban))
 
     disp.add_handler(CallbackQueryHandler(callback_query, pass_chat_data=True))
 
@@ -437,6 +479,16 @@ def main():
     updater.job_queue.run_daily(ready_to_battle, time(hour=23, minute=50))
     updater.job_queue.run_daily(ready_to_battle_result,
                                 time(hour=23, minute=55))
+    updater.job_queue.run_daily(fresh_profiles,
+                                time(hour=7, minute=40))
+    updater.job_queue.run_daily(fresh_profiles,
+                                time(hour=11, minute=40))
+    updater.job_queue.run_daily(fresh_profiles,
+                                time(hour=15, minute=40))
+    updater.job_queue.run_daily(fresh_profiles,
+                                time(hour=19, minute=40))
+    updater.job_queue.run_daily(fresh_profiles,
+                                time(hour=23, minute=40))
 
     # Start the Bot
     updater.start_polling()

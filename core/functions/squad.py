@@ -70,6 +70,8 @@ def del_squad(bot: Bot, update: Update, session):
     if update.message.chat.type == 'supergroup' and squad is not None:
         for member in squad.members:
             session.delete(member)
+        for order_group_item in squad.chat.group_items:
+            session.delete(order_group_item)
         session.delete(squad)
         session.commit()
         send_async(bot, chat_id=update.message.chat.id, text=MSG_SQUAD_DELETE)
@@ -197,7 +199,7 @@ def leave_squad(bot: Bot, update: Update, session):
         session.commit()
         admins = session.query(Admin).filter_by(admin_group=squad.chat_id).all()
         for adm in admins:
-            if adm.user_id != update.callback_query.from_user.id:
+            if adm.user_id != update.message.from_user.id:
                 send_async(bot, chat_id=adm.user_id,
                            text=MSG_SQUAD_LEAVED.format(user.character.name, squad.squad_name),
                            parse_mode=ParseMode.HTML)
