@@ -98,8 +98,8 @@ MSG_PROFILE_SHOW_FORMAT = '👤 %first_name% %last_name% (%username%)\n' \
                           '%pet%\n' \
                           '🕑 Последнее обновление %date%'
 
-# main.py texts
-MSG_MAIN_INLINE_BATTLE = 'ГРАБЬНАСИЛУЙУБИВАЙ!'
+# ---main.py texts-------
+MSG_MAIN_INLINE_BATTLE = 'Разбудить Ктулху'
 MSG_MAIN_READY_TO_BATTLE = 'К битве готовсь!'
 # -----------------------
 MSG_BUILD_REPORT_EXISTS = 'Ты уже кидал этот репорт!'
