@@ -1,8 +1,10 @@
+from datetime import datetime
+
 from telegram import Update, Bot, ParseMode
 
 from core.functions.reply_markup import generate_squad_markup
 from core.template import fill_char_template
-from core.types import User, AdminType, Admin, admin_allowed, Group, Squad, SquadMember, user_allowed
+from core.types import User, AdminType, Admin, admin_allowed, Group, Squad, SquadMember, user_allowed, Report, Character
 from core.utils import send_async
 from core.functions.inline_keyboard_handling import generate_squad_list, \
     generate_leave_squad, generate_squad_request, generate_squad_request_answer, generate_fire_up, \
@@ -12,7 +14,9 @@ from core.texts import *
 
 @user_allowed
 def squad_about(bot: Bot, update: Update, session):
-    markup = generate_squad_markup()
+    admin = session.query(Admin).filter(Admin.user_id == update.message.from_user.id,
+                                        Admin.admin_group != 0).first()
+    markup = generate_squad_markup(is_group_admin=admin is not None)
     send_async(bot,
                chat_id=update.message.chat.id,
                text=MSG_SQUAD_ABOUT,
@@ -230,3 +234,42 @@ def add_to_squad(bot: Bot, update: Update, session):
                            text=MSG_SQUAD_ADD_IN_SQUAD.format('@' + username))
             elif user.character is None:
                 send_async(bot, chat_id=update.message.chat.id, text=MSG_SQUAD_NO_PROFILE)
+
+
+@admin_allowed(AdminType.GROUP)
+def call_squad(bot: Bot, update: Update, session):
+    squad = session.query(Squad).filter_by(chat_id=update.message.chat.id).first()
+    if squad is not None:
+        users = session.query(User).join(SquadMember).filter(User.id == SquadMember.user_id)\
+            .filter(SquadMember.squad_id == squad.chat_id).all()
+        msg = 'Все сюда!\n'
+        for user in users:
+            msg += '@' + user.username + ' '
+        send_async(bot, chat_id=update.message.chat.id, text=msg)
+
+
+@admin_allowed(AdminType.GROUP)
+def battle_reports_show(bot: Bot, update: Update, session):
+    admin = session.query(Admin, Squad).filter(Admin.user_id == update.message.from_user.id,
+                                               Squad.chat_id == Admin.admin_group).all()
+    group_admin = []
+    for adm, squad in admin:
+        if squad is not None:
+            group_admin.append([adm, squad])
+    for adm, squad in group_admin:
+        now = datetime.now()
+        time_from = datetime(now.year, now.month,
+                             now.day, int(now.hour / 4) * 4, 0, 0)
+        reports = session.query(User, Report).outerjoin(Report).join(SquadMember, Report.user_id == SquadMember.user_id)\
+            .filter(SquadMember.squad_id == adm.admin_group,
+                    User.id == SquadMember.user_id,
+                    Report.user_id == SquadMember.user_id,
+                    Report.date > time_from).all()
+        text = 'Репорты отряда {} за битву {}\n'.format(squad.squad_name, time_from)
+        for user, report in reports:
+            if report:
+                text += '{} ({}): 🔥{} 💰{} 📦{}\n'.format(report.name, user.username,
+                                                          report.earned_exp, report.earned_gold, report.earned_stock)
+            else:
+                text += '{} ({}): проспал\n'.format(user.character.name, user.username)
+        send_async(bot, chat_id=update.message.chat.id, text=text)
