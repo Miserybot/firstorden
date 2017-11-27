@@ -38,7 +38,7 @@ from core.functions.common import (
     help_msg, ping, start, error, kick,
     admin_panel, stock_compare, trade_compare,
     delete_msg, delete_user,
-    user_panel)
+    user_panel, web_auth)
 from core.functions.inline_keyboard_handling import (
     callback_query, send_status, send_order, QueryType
 )
@@ -67,7 +67,7 @@ from core.texts import (
     MSG_SQUAD_READY, MSG_FULL_TEXT_LINE, MSG_FULL_TEXT_TOTAL,
     MSG_MAIN_INLINE_BATTLE, MSG_MAIN_READY_TO_BATTLE, MSG_IN_DEV, MSG_UPDATE_PROFILE, MSG_SQUAD_DELETE_OUTDATED,
     MSG_SQUAD_DELETE_OUTDATED_EXT)
-from core.types import Session, Order, Squad, Admin, user_allowed, Character, SquadMember
+from core.types import Session, Order, Squad, Admin, user_allowed, Character, SquadMember, User
 from core.utils import add_user, send_async
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -240,10 +240,7 @@ def manage_all(bot: Bot, update: Update, session, chat_data, job_queue):
             elif text == USER_COMMAND_SQUAD_LEAVE.lower():
                 leave_squad(bot, update)
             elif text == USER_COMMAND_CONTACTS.lower():
-                send_async(bot,
-                           chat_id=update.message.chat.id,
-                           text=MSG_IN_DEV,
-                           parse_mode=ParseMode.HTML)
+                web_auth(bot, update)
             elif text == ADMIN_COMMAND_ADMINPANEL.lower():
                 admin_panel(bot, update)
             elif 'wait_group_name' in chat_data and chat_data['wait_group_name']:
@@ -391,18 +388,20 @@ def fresh_profiles(bot: Bot, job_queue):
         characters = session.query(Character).filter(tuple_(Character.user_id, Character.date)
                                                      .in_([(a[0], a[1]) for a in actual_profiles]),
                                                      Character.date < datetime.now() - timedelta(days=14)).all()
-        members = session.query(SquadMember).filter(SquadMember.user_id
-                                                    .in_([character.user_id for character in characters])).all()
-        for member in members:
+        members = session.query(SquadMember, User).filter(SquadMember.user_id
+                                                          .in_([character.user_id for character in characters])) \
+            .join(User, User.id == SquadMember.user_id).all()
+        for member, user in members:
             session.delete(member)
             admins = session.query(Admin).filter_by(admin_group=member.squad_id).all()
             for adm in admins:
                 send_async(bot, chat_id=adm.user_id,
                            text=MSG_SQUAD_DELETE_OUTDATED_EXT
-                           .format(member.user.character.name, member.squad.squad_name),
+                           .format(member.user.character.name, member.user.username, member.squad.squad_name),
                            parse_mode=ParseMode.HTML)
             send_async(bot, chat_id=member.squad_id,
-                       text=MSG_SQUAD_DELETE_OUTDATED_EXT.format(member.user.character.name, member.squad.squad_name),
+                       text=MSG_SQUAD_DELETE_OUTDATED_EXT.format(member.user.character.name, member.user.username,
+                                                                 member.squad.squad_name),
                        parse_mode=ParseMode.HTML)
             send_async(bot,
                        chat_id=member.user_id,
