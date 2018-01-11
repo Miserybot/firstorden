@@ -1,6 +1,6 @@
 # Содержимое этого файла необходимо скопировать в config.py и изменить под себя
 
-TOKEN = '<542255798:AAGLKRHK4ehyMGBE6Oz2HED9Dd0TU3wV91w>' # Токен телеграмбота (получается у @BotFather)
+TOKEN = '542255798:AAGLKRHK4ehyMGBE6Oz2HED9Dd0TU3wV91w' # Токен телеграмбота (получается у @BotFather)
 DB = 'mysql+pymysql://<username>:<password>@<host>/<dbname>?charset=utf8mb4' # Строчка подключения к базе данных (поддерживается только MySql, о формате можно прочитать тут http://docs.sqlalchemy.org/en/latest/dialects/mysql.html)
 API_PORT = 88 # Порт, по которому будет доступен внешний апи бота (REST)
 GOVERNMENT_CHAT =  # Чат, в который бот будет слать отчёты
